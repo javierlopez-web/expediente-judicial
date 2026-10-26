@@ -199,7 +199,7 @@ function vistaResumen() {
     cont.querySelector('.adm-zona-tabla')?.replaceChildren(tabla);
   };
   const zona = h('div', { class: 'adm-zona-tabla' });
-  cont.append(
+  cont.append(...[
     h('h2', { id: 'adm-titulo' }, 'Resumen del curso'),
     S.config.edicionHabilitada === false ? h('div', { class: 'aviso aviso--alerta' }, h('span', null, '!'), h('p', null, 'La edición está cerrada para todos los estudiantes (Ajustes).')) : null,
     h('div', { class: 'adm-tarjetas' },
@@ -213,7 +213,7 @@ function vistaResumen() {
     t.estudiantes === 0 ? h('div', { class: 'aviso aviso--info' }, h('span', null, 'i'), h('p', null, 'Aún no hay estudiantes. Parte en «Nómina» para crear las cuentas.')) : null,
     h('h3', null, 'Estudiantes'),
     controlesFiltro(pintarTabla),
-    zona);
+    zona].filter(Boolean));
   zona.replaceChildren();
   pintarTabla();
   return cont;

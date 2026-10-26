@@ -420,7 +420,7 @@ function etapa6(ctx) {
           ? h('div', { class: 'aviso aviso--alerta', role: 'status' }, h('span', null, '!'),
             h('p', null, 'Editaste después de entregar: existe una versión posterior a la entregada. Si quieres que cuente como tu entrega, vuelve a marcarla como entregada.'))
           : null,
-      ]
+      ].filter(Boolean)
       : []));
     btnEntregar.textContent = entregada ? 'ENTREGAR NUEVAMENTE ESTA VERSIÓN' : 'MARCAR PREPARACIÓN COMO ENTREGADA';
   };
