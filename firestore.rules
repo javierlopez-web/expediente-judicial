@@ -113,7 +113,7 @@ service cloud.firestore {
       allow read: if esDueno(uid) || esProfesor();
 
       allow create: if puedeEditar(uid)
-        && request.resource.data.keys().hasOnly(['uid'] + clavesExpediente() + ['creadoEn'])
+        && request.resource.data.keys().hasOnly(['uid'].concat(clavesExpediente()).concat(['creadoEn']))
         && request.resource.data.uid == uid
         && request.resource.data.get('entregadoEn', null) == null
         && request.resource.data.get('version', 0) == 0
