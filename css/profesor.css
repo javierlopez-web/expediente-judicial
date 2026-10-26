@@ -1,0 +1,91 @@
+/* ============================================================
+   PANEL DEL PROFESOR (administración de expedientes)
+   Más sobrio que el espacio del estudiante: papel plano, tablas legibles.
+   ============================================================ */
+
+.adm { max-width: 90rem; }
+.adm-cabecera { display: flex; flex-wrap: wrap; gap: .8rem 2rem; justify-content: space-between; align-items: end; margin-bottom: 1rem; }
+.adm-cabecera h1 { margin: 0; }
+.adm-cabecera__acciones { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+
+.adm-nav { display: flex; flex-wrap: wrap; gap: .25rem; margin-bottom: 1.4rem; border-bottom: 3px solid #6D4C33; }
+.adm-nav a {
+  padding: .55rem 1rem; text-decoration: none; color: var(--tinta); font: 700 .85rem var(--f-etiqueta); letter-spacing: .06em; text-transform: uppercase;
+  background: rgba(231, 218, 190, .85); border: 1.5px solid #B9A57F; border-bottom: 0; border-radius: 8px 8px 0 0; margin-bottom: -3px;
+}
+.adm-nav a:hover { background: #F3E9CF; }
+.adm-nav a[aria-current='page'] { background: #FBF5E8; border-color: #6D4C33; box-shadow: inset 0 3px 0 var(--burdeos); }
+
+.adm-contenido { background: rgba(251, 245, 232, .94); border: 1.5px solid #B9A57F; border-radius: 4px; padding: clamp(1rem, 2.5vw, 2rem); box-shadow: var(--sombra-s); min-height: 24rem; }
+.adm-contenido h2 { font-size: 1.5rem; }
+.adm-contenido h3 { margin-top: 1.6rem; font-size: 1.1rem; }
+
+.adm-tarjetas { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); margin: 0 0 1.2rem; }
+.adm-tarjeta { padding: .9rem 1rem; background: #FFFCF3; border: 1.5px solid #B9A57F; border-left: 6px solid var(--burdeos); border-radius: 3px; display: grid; gap: .25rem; align-content: start; }
+.adm-tarjeta strong { font: 700 1.7rem/1.1 var(--f-titulo); }
+.adm-tarjeta span { font-size: .88rem; color: var(--tinta-suave); }
+.adm-tarjeta .progreso { margin-top: .3rem; }
+
+.adm-filtros { display: flex; flex-wrap: wrap; gap: .7rem 1rem; margin: .6rem 0 1rem; align-items: end; }
+.adm-filtro { display: grid; gap: .15rem; font: 700 .75rem var(--f-etiqueta); text-transform: uppercase; letter-spacing: .06em; }
+.adm-filtro select, .adm-filtro input { min-height: 2.4rem; font: 400 .95rem var(--f-texto); }
+
+.adm-barra-herramientas { display: flex; flex-wrap: wrap; gap: .6rem; margin: 0 0 1rem; align-items: center; }
+.adm-barra-herramientas input[type='search'] { min-height: 2.6rem; flex: 1 1 14rem; max-width: 22rem; }
+
+.adm-tabla-cont { overflow: auto; border: 1.5px solid #B9A57F; border-radius: 3px; background: #FFFEF9; }
+.adm-tabla { width: 100%; border-collapse: collapse; font-size: .93rem; }
+.adm-tabla th { position: sticky; top: 0; text-align: left; padding: .55rem .7rem; background: #E7DABE; font: 700 .72rem var(--f-etiqueta); text-transform: uppercase; letter-spacing: .07em; white-space: nowrap; z-index: 1; }
+.adm-tabla td { padding: .5rem .7rem; border-top: 1px solid #DDD0B0; vertical-align: middle; }
+.adm-tabla tbody tr:hover { background: #FAF3DE; }
+.adm-tabla select, .adm-tabla input[type='text'] { min-height: 2.2rem; padding: .2rem .4rem; font-size: .9rem; max-width: 12rem; }
+.adm-tabla .btn--chico { min-height: 2.1rem; padding: .2rem .6rem; font-size: .7rem; }
+.adm-acciones { display: flex; flex-wrap: wrap; gap: .3rem; }
+.adm-centro { text-align: center; }
+.adm-fila-suspendida { opacity: .6; }
+.adm-clave { font: 700 1.05rem var(--f-etiqueta); letter-spacing: .06em; user-select: all; }
+.adm-tabla tr[data-estado='error'] td { background: var(--error-fondo); }
+.adm-tabla tr[data-estado='nueva'] td { background: var(--ok-fondo); }
+.adm-tabla tr[data-estado='actualizar'] td { background: var(--azul-claro); }
+
+.adm-form-2 { display: grid; gap: 0 1rem; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); }
+.adm-form-3 { display: grid; gap: 0 1rem; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); }
+
+.adm-seccion-resp { margin: 0 0 1.4rem; padding: 1rem 1.2rem; background: #FFFEF9; border: 1px solid #C7B58A; border-radius: 3px; }
+.adm-seccion-resp h4 { font: 700 1.1rem var(--f-titulo); color: var(--burdeos); border-bottom: 2px solid var(--burdeos); padding-bottom: .2rem; }
+.adm-seccion-resp h5 { font: 700 .85rem var(--f-etiqueta); text-transform: uppercase; letter-spacing: .08em; margin: 1rem 0 .4rem; }
+.adm-qa { margin: 0 0 .7rem; }
+.adm-qa__p { margin: 0; padding: .3rem .6rem; background: #EFE6D2; font-weight: 700; font-size: .92rem; border: 1px solid #C7B58A; border-bottom: 0; }
+.adm-qa__r { margin: 0; padding: .5rem .6rem; border: 1px solid #C7B58A; white-space: pre-wrap; background: #fff; }
+.adm-qa__vacio { margin: 0; padding: .4rem .6rem; border: 1px solid #C7B58A; color: var(--tinta-suave); font-style: italic; background: #fff; }
+
+.adm-eval { display: grid; gap: 1.5rem; grid-template-columns: 1fr; }
+@media (min-width: 62rem) { .adm-eval { grid-template-columns: 18rem 1fr; align-items: start; } }
+.adm-lista-eval { list-style: none; margin: 0; padding: 0; max-height: 70vh; overflow: auto; border: 1.5px solid #B9A57F; background: #FFFEF9; }
+.adm-lista-eval a { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .3rem; padding: .5rem .7rem; text-decoration: none; color: var(--tinta); border-bottom: 1px solid #DDD0B0; }
+.adm-lista-eval a:hover { background: #FAF3DE; }
+.adm-lista-eval a[aria-current='true'] { background: var(--azul-claro); box-shadow: inset 4px 0 0 var(--burdeos); font-weight: 700; }
+.adm-lista-eval small { color: var(--tinta-suave); }
+.adm-dimension { margin: 0 0 1rem; padding: .6rem 1rem 1rem; border: 1.5px solid #B9A57F; border-radius: 3px; background: #FFFEF9; }
+.adm-dimension legend { font: 700 1rem var(--f-titulo); padding: 0 .4rem; }
+.adm-dimension legend span { font-family: var(--f-etiqueta); color: var(--burdeos); font-size: .9rem; margin-left: .5rem; }
+.adm-criterio { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .5rem; padding: .4rem 0; border-bottom: 1px dashed #DDD0B0; font-weight: 400; }
+.adm-criterio__pts { display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap; }
+.adm-criterio input { width: 5.2rem; min-height: 2.3rem; text-align: right; }
+.adm-total { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; padding: .8rem 1rem; margin: 0 0 1rem; background: #F3E9CF; border: 1.5px solid var(--burdeos); border-radius: 3px; font-size: 1.1rem; position: sticky; bottom: .5rem; }
+.adm-escala { margin-top: 1.5rem; }
+
+.adm-descargas { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); }
+.adm-descarga { padding: 1rem; background: #FFFCF3; border: 1.5px solid #B9A57F; border-radius: 3px; display: grid; gap: .6rem; align-content: start; }
+.adm-descarga h3 { margin: 0; }
+.adm-descarga p { margin: 0; font-size: .92rem; }
+
+.adm-ajustes { display: grid; gap: .4rem; max-width: 46rem; }
+.adm-ajustes .btn { justify-self: start; margin-top: .6rem; }
+.adm-peligro { margin-top: 2.4rem; padding: 1rem; border: 2px dashed var(--error); border-radius: 3px; max-width: 46rem; }
+
+dialog table.adm-tabla input { width: 100%; }
+@media (max-width: 40rem) {
+  .adm-nav a { padding: .45rem .6rem; font-size: .75rem; }
+  .adm-tabla th, .adm-tabla td { padding: .4rem .45rem; }
+}
