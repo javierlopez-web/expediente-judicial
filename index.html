@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#553923">
+  <title>MI EXPEDIENTE JUDICIAL</title>
+  <meta name="description" content="Preparación individual para el juicio simulado — Liceo Luis Urbina Flores.">
+  <link rel="icon" href="assets/img/chinche.webp" type="image/webp">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/estudiante.css">
+  <link rel="stylesheet" href="css/profesor.css">
+</head>
+<body>
+  <a class="saltar" href="#vista" onclick="document.getElementById('vista')?.focus();return false;">Saltar al contenido</a>
+  <div id="aviso-modo" role="status" hidden></div>
+  <div id="app"><p class="cargando" role="status">Abriendo el archivo…</p></div>
+  <div id="avisos" aria-live="polite"></div>
+  <noscript><p style="padding:2rem;text-align:center">Esta aplicación necesita JavaScript activado para funcionar.</p></noscript>
+  <script>
+    // Con http(s) se cargan los módulos ES; abierto con doble clic (file://) Chrome los bloquea, así que se usa el paquete único.
+    (function () {
+      var s = document.createElement('script');
+      if (location.protocol === 'file:') s.src = 'js/app.bundle.js'; else { s.type = 'module'; s.src = 'js/app.js'; }
+      document.body.appendChild(s);
+    })();
+  </script>
+</body>
+</html>

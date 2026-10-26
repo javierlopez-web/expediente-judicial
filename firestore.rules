@@ -1,0 +1,155 @@
+rules_version = '2';
+
+/**
+ * REGLAS DE SEGURIDAD · MI EXPEDIENTE JUDICIAL
+ *
+ * Funciona con el plan gratuito (Spark): no hay Cloud Functions ni Admin SDK.
+ *
+ * Quién es quién:
+ *   · Profesor  → existe el documento profesores/<uid>. Ese documento se crea A MANO en la consola de Firebase
+ *                 (Firestore → «Iniciar colección» → profesores); las reglas impiden que se cree desde cualquier página.
+ *                 NO se confía en el correo.
+ *   · Estudiante → cualquier otra cuenta autenticada; solo puede tocar SU expediente (documento con su uid).
+ *
+ * Limitación conocida (decisión de diseño): la contraseña de cada estudiante se deriva de su nombre y apellido,
+ * así que quien conozca esos datos de un compañero puede ingresar como él. Estas reglas protegen a los estudiantes
+ * de personas sin cuenta y al profesor/evaluaciones de los estudiantes, pero NO entre compañeros que se suplanten.
+ */
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* ---------- Funciones auxiliares ---------- */
+
+    function autenticado() { return request.auth != null; }
+    function esProfesor() { return autenticado() && exists(/databases/$(database)/documents/profesores/$(request.auth.uid)); }
+    function esDueno(uid) { return autenticado() && request.auth.uid == uid; }
+
+    function hayConfig() { return exists(/databases/$(database)/documents/config/proyecto); }
+    function config() { return get(/databases/$(database)/documents/config/proyecto).data; }
+    function edicionAbierta() { return !hayConfig() || config().get('edicionHabilitada', true) == true; }
+    function asignacionesBloqueadasGlobal() { return hayConfig() && config().get('asignacionesBloqueadas', false) == true; }
+
+    function hayPerfil(uid) { return exists(/databases/$(database)/documents/estudiantes/$(uid)); }
+    function perfil(uid) { return get(/databases/$(database)/documents/estudiantes/$(uid)).data; }
+
+    // El estudiante puede escribir solo si: es el dueño, su cuenta está activa, el profesor no cerró su edición
+    // ni la edición general.
+    function puedeEditar(uid) {
+      return esDueno(uid) && hayPerfil(uid)
+        && perfil(uid).get('activo', true) == true
+        && perfil(uid).get('cerrado', false) == false
+        && edicionAbierta();
+    }
+
+    /* ---------- Profesores (solo se crean a mano en la consola) ---------- */
+
+    match /profesores/{uid} {
+      allow read: if esDueno(uid);
+      allow write: if false;
+    }
+
+    /* ---------- Configuración del proyecto ---------- */
+
+    match /config/{doc} {
+      allow read: if autenticado();
+      allow write: if esProfesor();
+    }
+
+    /* ---------- Perfil del estudiante (nombre, curso, caso, personaje) ---------- */
+
+    match /estudiantes/{uid} {
+      allow read: if esDueno(uid) || esProfesor();
+      // Solo el profesor crea perfiles (la cuenta de Authentication la crea la página del profesor con una segunda instancia).
+      allow create: if esProfesor()
+        && request.resource.data.keys().hasOnly(['uid', 'nombre', 'apellido', 'nombreMostrar', 'curso', 'caso', 'personaje',
+                                                 'asignacionBloqueada', 'activo', 'cerrado', 'codigoCuenta', 'creadoEn'])
+        && request.resource.data.uid == uid
+        && request.resource.data.activo == true
+        && request.resource.data.cerrado == false;
+      allow delete: if esProfesor();
+      // El profesor puede asignar caso/personaje, bloquear asignaciones, suspender y cerrar la edición de un estudiante.
+      allow update: if esProfesor()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['caso', 'personaje', 'asignacionBloqueada', 'curso', 'cerrado', 'activo', 'actualizadoEn'])
+        && (
+          // no se cambia caso/personaje si la asignación está bloqueada (global o individual)
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['caso', 'personaje'])
+          || (resource.data.get('asignacionBloqueada', false) == false && !asignacionesBloqueadasGlobal())
+        );
+    }
+
+    /* ---------- Expediente (respuestas) ---------- */
+
+    function clavesExpediente() {
+      return ['respuestas', 'estado', 'progreso', 'etapaActual', 'etapasVisitadas', 'ultimoGuardado',
+              'entregadoEn', 'editadoDespuesDeEntrega', 'version', 'ultimaEdicionPosterior'];
+    }
+
+    // Entrega: solo si `entregadoEn` toma la hora del servidor, la versión sube de a una y el estado queda "entregada".
+    // Si no hay entrega nueva, ni `entregadoEn` ni `version` pueden cambiar.
+    function entregaValida() {
+      let antes = resource.data;
+      let despues = request.resource.data;
+      let hayEntrega = despues.get('entregadoEn', null) != antes.get('entregadoEn', null);
+      return hayEntrega
+        ? (despues.entregadoEn == request.time
+           && despues.get('estado', '') == 'entregada'
+           && despues.get('version', 0) == antes.get('version', 0) + 1
+           && despues.get('editadoDespuesDeEntrega', false) == false)
+        : despues.get('version', 0) == antes.get('version', 0);
+    }
+
+    // Si ya estaba entregada y se modifican las respuestas sin una entrega nueva, queda registrada la edición posterior.
+    function edicionPosteriorRegistrada() {
+      let antes = resource.data;
+      let despues = request.resource.data;
+      return antes.get('entregadoEn', null) == null
+        || despues.get('respuestas', {}) == antes.get('respuestas', {})
+        || despues.get('entregadoEn', null) != antes.get('entregadoEn', null)
+        || (despues.get('editadoDespuesDeEntrega', false) == true && despues.get('ultimaEdicionPosterior', null) == request.time);
+    }
+
+    match /expedientes/{uid} {
+      allow read: if esDueno(uid) || esProfesor();
+
+      allow create: if puedeEditar(uid)
+        && request.resource.data.keys().hasOnly(['uid'] + clavesExpediente() + ['creadoEn'])
+        && request.resource.data.uid == uid
+        && request.resource.data.get('entregadoEn', null) == null
+        && request.resource.data.get('version', 0) == 0
+        && request.resource.data.get('respuestas', {}).size() <= 400;
+
+      allow update: if puedeEditar(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(clavesExpediente())
+        && request.resource.data.uid == uid
+        && request.resource.data.get('respuestas', {}).size() <= 400
+        && entregaValida()
+        && edicionPosteriorRegistrada();
+
+      allow delete: if false;
+
+      /* Copias inmutables de lo entregado. */
+      match /versiones/{numero} {
+        allow read: if esDueno(uid) || esProfesor();
+        allow create: if puedeEditar(uid)
+          && request.resource.data.keys().hasOnly(['uid', 'numero', 'respuestas', 'entregadoEn'])
+          && request.resource.data.uid == uid
+          && request.resource.data.entregadoEn == request.time
+          && request.resource.data.numero == getAfter(/databases/$(database)/documents/expedientes/$(uid)).data.version;
+        allow update, delete: if false;
+      }
+    }
+
+    /* ---------- Evaluaciones (solo el profesor escribe) ---------- */
+
+    match /evaluaciones/{uid} {
+      allow read: if esProfesor() || (esDueno(uid) && hayConfig() && config().get('calificacionesVisibles', false) == true);
+      allow write: if esProfesor();
+    }
+
+    /* Todo lo demás está cerrado. */
+    match /{documento=**} {
+      allow read, write: if false;
+    }
+  }
+}
