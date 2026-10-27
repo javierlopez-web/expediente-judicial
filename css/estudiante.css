@@ -166,7 +166,7 @@
   box-shadow: inset 0 0 30px rgba(60, 35, 10, .45), 0 12px 24px rgba(0, 0, 0, .35);
 }
 .corcho__rejilla { display: grid; gap: clamp(1.4rem, 3vw, 2.4rem) clamp(.4rem, 2vw, 1.5rem); grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); justify-items: center; }
-@media (min-width: 60rem) { .corcho__rejilla { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 60rem) { .corcho__rejilla { grid-template-columns: repeat(2, 1fr); max-width: 44rem; margin-inline: auto; } }
 
 .nota {
   --giro: 0deg;
@@ -286,6 +286,19 @@
 .tarjeta:nth-child(even) { transform: rotate(.3deg); }
 .tarjeta__chinche { position: absolute; top: -.8rem; left: 1.2rem; width: 1.5rem; }
 .tarjeta h3 { font-family: var(--f-etiqueta); text-transform: uppercase; letter-spacing: .1em; color: var(--burdeos); font-size: .9rem; }
+@media (min-width: 52rem) { .tarjetas-antecedentes--dos { grid-template-columns: 1fr 1fr; } }
+.tarjeta--compacta .campo-resp { margin-bottom: .9rem; }
+.tarjeta--compacta .campo-resp > label { font-size: .95rem; }
+.tarjeta--compacta textarea { min-height: 3.6rem; }
+/* Preguntas para la audiencia (etapa 3): se ven como una lista numerada */
+.lista-preguntas { counter-reset: pregunta; padding-left: .2rem; }
+.lista-preguntas > .campo-resp { position: relative; padding-left: 2.2rem; margin-bottom: 1rem; }
+.lista-preguntas > .campo-resp::before { counter-increment: pregunta; content: counter(pregunta); position: absolute; left: 0; top: .1rem; width: 1.6rem; height: 1.6rem; border: 2px solid var(--burdeos); border-radius: 50%; color: var(--burdeos); font: 700 .85rem/1.45rem var(--f-etiqueta); text-align: center; }
+.lista-preguntas textarea { min-height: 3.2rem; }
+/* Práctica de límites (etapa 1, opcional) */
+.practica { margin: 2rem 0 1.6rem; border: 1.5px dashed var(--sepia); border-radius: var(--radio); padding: .6rem 1rem; background: rgba(255, 252, 240, .55); }
+.practica > summary { cursor: pointer; font: 700 1rem var(--f-titulo); padding: .3rem 0; }
+.practica[open] > summary { margin-bottom: .6rem; }
 .ejemplo-metodologico { margin-bottom: 1.6rem; }
 .ejemplo-metodologico dl { margin: 0; display: grid; gap: .6rem; }
 .ejemplo-metodologico dt { font: 700 .75rem var(--f-etiqueta); text-transform: uppercase; letter-spacing: .08em; color: var(--azul-osc); }
