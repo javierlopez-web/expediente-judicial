@@ -45,9 +45,10 @@ js/app.js                   Arranque + enrutador
 js/app.bundle.js            Paquete único de todo js/ (lo usa index.html al abrirse con doble clic).
                             ⚠ Si editas algo en js/, regénéralo:  cd tools && npm install && npm run app
 js/ui-estudiante.js         Ingreso, bienvenida, tablero, marco de etapas, conflictos
-js/ui-etapas.js             Las seis etapas
+js/ui-etapas.js             Las cuatro etapas (versión 2, simplificada)
 js/ui-comun.js              Diálogos, avisos, barras
-js/contenido.js             TODO el texto y la estructura (etapas, personajes, preguntas): editable
+js/contenido.js             TODO el texto y la estructura (etapas, personajes, preguntas) y la migración de respuestas antiguas: editable
+js/heredado.js              Etiquetas de las preguntas de la versión anterior (para mostrar respuestas antiguas)
 js/progreso.js              Cálculo de avance y estado
 js/guardado.js              Autoguardado con cola, reintentos y detección de conflictos
 js/servicios.js             Fachada que usa la interfaz (las 10 funciones del encargo)
@@ -58,7 +59,7 @@ js/document-export.js       Word (.docx) con docx.js + correo mailto
 js/teacher-dashboard.js     Panel del profesor
 js/teacher-nomina.js        Nómina, importación CSV, cuentas
 js/evaluacion.js            Rúbrica de 100 puntos y escala de notas (configurable)
-js/respaldo.js, audio.js, util.js
+js/audio.js, util.js
 vendor/                     firebase.bundle.js, docx.min.js, jszip.min.js (ya construidos; ver tools/)
 firestore.rules             Reglas de seguridad
 firestore.indexes.json      (no se necesitan índices)
@@ -130,6 +131,8 @@ Los PNG originales están en `assets/originales/`.
 
 ## 8. Pruebas
 ```bash
+node --test tests/estructura.test.mjs   # versión 2: preguntas por personaje, avance, acusado en silencio,
+                                        # migración de respuestas antiguas, respaldo y Word de los 10 personajes
 node tests/logica.test.mjs        # progreso, notas, estructura de contenido
 node tests/guardado.test.mjs      # autoguardado, conflictos, sin conexión
 node tests/documento.test.mjs     # genera un Word por personaje y verifica su contenido
