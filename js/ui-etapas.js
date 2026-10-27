@@ -1,21 +1,22 @@
 /**
- * LAS SEIS ETAPAS DEL ESTUDIANTE
+ * LAS CUATRO ETAPAS DEL ESTUDIANTE
+ *   1. Conozco mi personaje · 2. Analizo mi caso · 3. Preparo mi participación · 4. Reviso y descargo
  * Cada función devuelve el <article> de la etapa. `ctx` lo arma ui-estudiante.js:
  *   perfil, config, resp (respuestas vivas), editable, cambiar(id, valor), alActualizar(fn),
  *   ir(hash), irACampo(etapa, id), progreso(), acciones{...}
  */
 
-import { h, idUnico, rutaImg } from './util.js';
+import { h, rutaImg } from './util.js';
 import {
-  ETAPAS, PERSONAJES, FUNCIONES, FUNCION_JUEZ_ESPECIFICA, NOTA_JUECES, ETAPA1_CAMPOS,
-  ETAPA2_INTRO, ETAPA2_MATERIAL, ETAPA2_EJEMPLO, ETAPA2_TARJETAS, ETAPA2_DUDAS,
-  ETAPA3_INTRO, CLASIFICACION, OPCIONES_CLASIFICACION, ETAPA3_CAMPOS,
-  estructuraEtapa4, esRequerido, seccionesRespaldo, RESPALDO_INTRO, RESPALDO_ADVERTENCIA,
+  ETAPAS, ETAPA_REVISION, PERSONAJES, FUNCIONES, FUNCION_JUEZ_ESPECIFICA, NOTA_JUECES, ORIENTACION_PERSONAJE, ETAPA1_CAMPOS,
+  PRACTICA_INTRO, CLASIFICACION, OPCIONES_CLASIFICACION,
+  ETAPA2_INTRO, ETAPA2_MATERIAL, ETAPA2_DECLARANTES, ETAPA2_EJEMPLO, ETAPA2_TARJETAS, ETAPA2_DUDAS,
+  estructuraParticipacion, esRequerido, esDeclarante, respuestasHeredadas,
   COMPROBACIONES, detectarDecisionAnticipada, TEXTOS,
 } from './contenido.js';
-import { etapaBloqueada, ETIQUETA_ESTADO, decisionesAnticipadas } from './progreso.js';
-import { reunirRespaldo } from './respaldo.js';
-import { barraProgreso, actualizarBarraProgreso, confirmar, avisar, chipEstado } from './ui-comun.js';
+import { etapaBloqueada, decisionesAnticipadas } from './progreso.js';
+import { armarContenido } from './document-export.js';
+import { barraProgreso, actualizarBarraProgreso } from './ui-comun.js';
 import { fechaHora, soloFecha } from './util.js';
 import { sonar } from './audio.js';
 
@@ -43,7 +44,7 @@ function cabecera(n, ctx, titulo) {
   return h('header', { class: 'etapa__cabecera' },
     h('p', { class: 'etiqueta-juridica' }, `Etapa ${n} de ${ETAPAS.length} · ${e.titulo}`),
     h('h1', { id: 'titulo-etapa', tabindex: '-1' }, titulo || e.titulo),
-    n < 6 ? h('div', { class: 'etapa__resumen' }, barra, texto) : null);
+    n < ETAPA_REVISION ? h('div', { class: 'etapa__resumen' }, barra, texto) : null);
 }
 
 function pie(n, ctx) {
@@ -56,7 +57,7 @@ function pie(n, ctx) {
       ant ? h('a', { class: 'btn btn--secundario', href: `#/etapa/${ant}` }, '← Anterior') : null,
       h('a', { class: 'btn btn--secundario', href: '#/tablero' }, 'Volver al tablero')),
     h('div', { class: 'grupo-botones' },
-      sig ? h('a', { class: 'btn', href: `#/etapa/${sig}` }, sig === 6 ? 'Ir a la revisión →' : 'Siguiente →') : null));
+      sig ? h('a', { class: 'btn', href: `#/etapa/${sig}` }, sig === ETAPA_REVISION ? 'Ir a la revisión →' : 'Siguiente →') : null));
 }
 
 function avisoEdicionCerrada(ctx) {
@@ -88,7 +89,7 @@ export function crearCampo(def, ctx) {
       'Parece que estás redactando una decisión. Todavía no corresponde: el tribunal decide después de escuchar toda la prueba y deliberar. Reformula este texto como preparación.')
     : null;
   const ta = h('textarea', {
-    id, name: id, rows: def.filas || 5, maxlength: '8000', lang: 'es', spellcheck: 'true',
+    id, name: id, rows: def.filas || 4, maxlength: '8000', lang: 'es', spellcheck: 'true',
     readonly: !ctx.editable, 'aria-describedby': alerta ? idAlerta : null,
   });
   ta.value = ctx.resp[id] ?? '';
@@ -148,54 +149,7 @@ function camposAgrupados(campos, ctx) {
   return salida;
 }
 
-/* ============================== ETAPA 1 ============================== */
-
-function etapa1(ctx) {
-  const p = PERSONAJES[ctx.perfil.personaje];
-  const juez = p.base === 'juez';
-  return h('article', { class: 'hoja hoja--lectura', 'aria-labelledby': 'titulo-etapa' },
-    decoracion(),
-    cabecera(1, ctx),
-    avisoEdicionCerrada(ctx),
-    h('h2', null, '¿Cuál es mi función en el juicio?'),
-    h('div', { class: 'recuadro-funcion' },
-      h('p', { class: 'etiqueta-juridica' }, `Mi personaje: ${p.nombre}`),
-      h('p', { class: 'funcion' }, FUNCIONES[p.base]),
-      juez ? h('p', null, FUNCION_JUEZ_ESPECIFICA[p.subrol]) : null),
-    juez ? h('div', { class: 'aviso-nota aviso-nota--juez' }, h('p', null, NOTA_JUECES)) : null,
-    ETAPA1_CAMPOS.map((c) => crearCampo(c, ctx)),
-    pie(1, ctx));
-}
-
-/* ============================== ETAPA 2 ============================== */
-
-function etapa2(ctx) {
-  const ej = ETAPA2_EJEMPLO;
-  return h('article', { class: 'hoja hoja--lectura', 'aria-labelledby': 'titulo-etapa' },
-    decoracion(),
-    cabecera(2, ctx, 'EXAMINA LOS ANTECEDENTES'),
-    avisoEdicionCerrada(ctx),
-    h('p', { class: 'intro' }, ETAPA2_INTRO),
-    h('div', { class: 'aviso aviso--info' }, h('span', null, 'i'), h('p', null, ETAPA2_MATERIAL)),
-    h('details', { class: 'ayuda ejemplo-metodologico' },
-      h('summary', null, 'Ver un ejemplo metodológico (no es de ningún caso real)'),
-      h('div', null,
-        h('dl', null,
-          h('dt', null, 'Antecedente'), h('dd', null, ej.antecedente),
-          h('dt', null, 'Qué permite afirmar'), h('dd', null, ej.permite),
-          h('dt', null, 'Qué limitación presenta'), h('dd', null, ej.limitacion)),
-        h('p', null, h('strong', null, ej.moraleja)))),
-    h('h2', null, 'Tus tres antecedentes principales'),
-    h('div', { class: 'tarjetas-antecedentes' },
-      ETAPA2_TARJETAS.map((t) => h('section', { class: 'tarjeta', 'aria-label': `Antecedente ${t.n}` },
-        h('img', { class: 'tarjeta__chinche', src: img('chinche'), alt: '', 'aria-hidden': 'true' }),
-        h('h3', null, `Antecedente ${t.n}`),
-        t.campos.map((c) => crearCampo({ ...c, filas: 3 }, ctx))))),
-    crearCampo({ ...ETAPA2_DUDAS, filas: 5 }, ctx),
-    pie(2, ctx));
-}
-
-/* ============================== ETAPA 3 ============================== */
+/* ============================== Práctica de límites (en la etapa 1) ============================== */
 
 function crearAfirmacion(item, ctx) {
   const id = `clasif_${item.id}`;
@@ -225,49 +179,102 @@ function crearAfirmacion(item, ctx) {
   return fs;
 }
 
-function etapa3(ctx) {
-  const hayPersonaje = Boolean(ctx.perfil.personaje);
+function practicaLimites(ctx, abierta) {
   const avance = h('p', { class: 'clasificacion__avance', role: 'status' });
   const refrescar = () => {
     const n = CLASIFICACION.filter((c) => String(ctx.resp[`clasif_${c.id}`] || '').trim()).length;
-    avance.textContent = `Afirmaciones clasificadas: ${n} de ${CLASIFICACION.length}`;
+    avance.textContent = `Afirmaciones respondidas: ${n} de ${CLASIFICACION.length} (práctica opcional)`;
   };
   ctx.alActualizar(refrescar);
   refrescar();
-  return h('article', { class: 'hoja hoja--lectura', 'aria-labelledby': 'titulo-etapa' },
-    decoracion(),
-    cabecera(3, ctx, 'LO QUE PUEDO Y NO PUEDO HACER'),
-    avisoEdicionCerrada(ctx),
-    h('p', { class: 'intro' }, ETAPA3_INTRO),
-    h('div', { class: 'aviso aviso--info' }, h('span', null, 'i'),
-      h('p', null, 'Esta actividad es de práctica: no tiene puntaje, no se califica y no aparece en el Word. Sirve para pensar antes de preparar tu personaje.')),
-    h('h2', null, 'Clasifica cada afirmación'),
-    avance,
-    h('div', { class: 'clasificacion' }, CLASIFICACION.map((c) => crearAfirmacion(c, ctx))),
-    h('h2', null, 'Tus límites'),
-    hayPersonaje
-      ? [h('p', null, 'Escribe dos límites que debes respetar en tu propio personaje.'), ETAPA3_CAMPOS.map((c) => crearCampo(c, ctx))]
-      : h('div', { class: 'aviso aviso--alerta' }, h('span', null, '!'),
-        h('p', null, 'Estos campos se habilitan cuando el profesor te asigne un personaje. Mientras tanto puedes terminar la actividad de arriba.')),
-    pie(3, ctx));
+  return h('details', { class: 'practica', open: abierta },
+    h('summary', null, 'Práctica rápida: ¿qué está permitido durante el juicio?'),
+    h('div', null,
+      h('p', { class: 'campo__ayuda' }, PRACTICA_INTRO),
+      avance,
+      h('div', { class: 'clasificacion' }, CLASIFICACION.map((c) => crearAfirmacion(c, ctx)))));
 }
 
-/* ============================== ETAPA 4 ============================== */
+/* ============================== ETAPA 1 · CONOZCO MI PERSONAJE ============================== */
 
-function etapa4(ctx) {
-  const est = estructuraEtapa4(ctx.perfil.personaje);
+function etapa1(ctx) {
+  const p = PERSONAJES[ctx.perfil.personaje];
+  if (!p) {
+    return h('article', { class: 'hoja hoja--lectura', 'aria-labelledby': 'titulo-etapa' },
+      decoracion(),
+      cabecera(1, ctx),
+      h('div', { class: 'aviso aviso--alerta' }, h('span', null, '!'),
+        h('p', null, 'Las preguntas de esta etapa se habilitan cuando el profesor te asigne un personaje. Mientras tanto puedes hacer la práctica de abajo y avanzar en la etapa 2.')),
+      practicaLimites(ctx, true),
+      pie(1, ctx));
+  }
+  const juez = p.base === 'juez';
+  return h('article', { class: 'hoja hoja--lectura', 'aria-labelledby': 'titulo-etapa' },
+    decoracion(),
+    cabecera(1, ctx),
+    avisoEdicionCerrada(ctx),
+    h('h2', null, '¿Quién soy en el juicio?'),
+    h('div', { class: 'recuadro-funcion' },
+      h('p', { class: 'etiqueta-juridica' }, `Mi personaje: ${p.nombre}`),
+      h('p', { class: 'funcion' }, FUNCIONES[p.base]),
+      juez ? h('p', null, FUNCION_JUEZ_ESPECIFICA[p.subrol]) : null),
+    h('div', { class: `aviso-nota${juez ? ' aviso-nota--juez' : ''}` },
+      h('p', null, h('strong', null, 'Orientación: '), ORIENTACION_PERSONAJE[p.clave]),
+      juez ? h('p', null, NOTA_JUECES) : null),
+    ETAPA1_CAMPOS.map((c) => crearCampo(c, ctx)),
+    practicaLimites(ctx, false),
+    pie(1, ctx));
+}
+
+/* ============================== ETAPA 2 · ANALIZO MI CASO ============================== */
+
+function etapa2(ctx) {
+  const ej = ETAPA2_EJEMPLO;
+  const declarante = esDeclarante(ctx.perfil.personaje);
+  return h('article', { class: 'hoja hoja--lectura', 'aria-labelledby': 'titulo-etapa' },
+    decoracion(),
+    cabecera(2, ctx, 'ANALIZO MI CASO'),
+    avisoEdicionCerrada(ctx),
+    h('p', { class: 'intro' }, ETAPA2_INTRO),
+    h('div', { class: 'aviso aviso--info' }, h('span', null, 'i'), h('p', null, ETAPA2_MATERIAL)),
+    declarante ? h('div', { class: 'aviso-nota' }, h('p', null, ETAPA2_DECLARANTES)) : null,
+    h('details', { class: 'ayuda ejemplo-metodologico' },
+      h('summary', null, 'Ver un ejemplo metodológico (no es de ningún caso real)'),
+      h('div', null,
+        h('dl', null,
+          h('dt', null, 'Antecedente'), h('dd', null, ej.antecedente),
+          h('dt', null, 'Qué permite afirmar'), h('dd', null, ej.permite),
+          h('dt', null, 'Qué no permite concluir'), h('dd', null, ej.limitacion)),
+        h('p', null, h('strong', null, ej.moraleja)))),
+    h('h2', null, 'Dos antecedentes relevantes'),
+    h('div', { class: 'tarjetas-antecedentes tarjetas-antecedentes--dos' },
+      ETAPA2_TARJETAS.map((t) => h('section', { class: 'tarjeta tarjeta--compacta', 'aria-label': `Antecedente ${t.n}` },
+        h('img', { class: 'tarjeta__chinche', src: img('chinche'), alt: '', 'aria-hidden': 'true' }),
+        h('h3', null, `Antecedente ${t.n}`),
+        t.campos.map((c) => crearCampo(c, ctx))))),
+    crearCampo(ETAPA2_DUDAS, ctx),
+    pie(2, ctx));
+}
+
+/* ============================== ETAPA 3 · PREPARO MI PARTICIPACIÓN ============================== */
+
+function etapa3(ctx) {
+  const est = estructuraParticipacion(ctx.perfil.personaje);
   const p = PERSONAJES[ctx.perfil.personaje];
   const nodoAvisos = est.avisos.map((t) => h('div', { class: `aviso-nota${est.avisoJuez ? ' aviso-nota--juez' : ''}` }, h('p', null, t)));
 
   const secciones = est.apartados.map((a) => {
     const avance = h('span', { class: 'apartado__avance' });
+    const cuerpo = a.presentacion === 'lista'
+      ? h('div', { class: 'lista-preguntas' }, a.campos.map((c) => crearCampo(c, ctx)))
+      : camposAgrupados(a.campos, ctx);
     const sec = h('section', { class: 'apartado', id: `ap-${a.id}`, 'aria-labelledby': `ap-${a.id}-t` },
       h('div', { class: 'apartado__cabecera' },
         h('span', { class: 'apartado__num', 'aria-hidden': 'true' }, String(a.numero).padStart(2, '0')),
         h('h2', { id: `ap-${a.id}-t` }, a.titulo),
         avance),
       a.nota ? h('p', { class: 'apartado__nota' }, a.nota) : null,
-      camposAgrupados(a.campos, ctx));
+      cuerpo);
     return { a, sec, avance };
   });
 
@@ -283,7 +290,7 @@ function etapa4(ctx) {
       const req = a.campos.filter((c) => esRequerido(c, ctx.resp));
       const hechos = req.filter((c) => String(ctx.resp[c.id] || '').trim()).length;
       const completo = req.length > 0 ? hechos === req.length : a.campos.some((c) => String(ctx.resp[c.id] || '').trim());
-      avance.textContent = req.length ? `${hechos}/${req.length}` : 'opcional';
+      avance.textContent = req.length ? (completo ? 'listo' : `${hechos}/${req.length}`) : 'opcional';
       const btn = indice.querySelector(`[data-ap="${a.id}"]`);
       if (btn) btn.dataset.estado = completo ? 'completa' : '';
     }
@@ -293,82 +300,50 @@ function etapa4(ctx) {
 
   return h('article', { class: 'hoja hoja--ancha', 'aria-labelledby': 'titulo-etapa' },
     decoracion(),
-    cabecera(4, ctx, est.titulo),
+    cabecera(3, ctx, est.titulo),
     avisoEdicionCerrada(ctx),
     h('p', { class: 'etiqueta-juridica' }, `Preparación específica · ${p.nombre}`),
     nodoAvisos,
     indice,
     secciones.map((s) => s.sec),
-    pie(4, ctx));
+    pie(3, ctx));
 }
 
-/* ============================== ETAPA 5 ============================== */
+/* ============================== ETAPA 4 · REVISO Y DESCARGO ============================== */
 
+/** Vista previa del documento (es el mismo contenido del Word y sirve de respaldo de continuidad). */
 function vistaPreviaDocumento(ctx) {
-  const p = PERSONAJES[ctx.perfil.personaje];
-  const secs = seccionesRespaldo(ctx.perfil.personaje);
+  const c = armarContenido({ perfil: ctx.perfil, respuestas: ctx.resp, expediente: ctx.expediente() });
   return h('div', { class: 'documento-previo' },
     h('div', { class: 'documento-previo__encabezado' },
       h('strong', null, 'LICEO LUIS URBINA FLORES'), h('br'),
-      `Documento de respaldo · ${ctx.perfil.nombreMostrar || ''}`, h('br'),
-      `Caso ${ctx.perfil.caso ?? '—'} · ${p.nombre}`),
-    secs.map((s) => [
+      `${ctx.perfil.nombreMostrar || ''} · ${c.p?.nombre || TEXTOS.pendienteAsignacion}`, h('br'),
+      `Caso ${ctx.perfil.caso ?? '—'}`),
+    c.secciones.map((s) => [
       h('h3', null, s.titulo),
-      String(ctx.resp[s.campo] || '').trim() ? h('p', null, ctx.resp[s.campo]) : h('p', { class: 'vacio' }, '(sección sin completar)'),
-    ]),
-    h('p', { class: 'vacio', style: { marginTop: '1rem' } }, RESPALDO_ADVERTENCIA));
+      s.vacio ? h('p', { class: 'vacio' }, s.vacio) : null,
+      s.bloques.map((b) => [
+        b.subtitulo ? h('p', null, h('strong', null, b.subtitulo)) : null,
+        b.campos.map((x) => [
+          h('p', null, h('strong', null, x.etiqueta)),
+          x.respuesta ? h('p', null, x.respuesta) : h('p', { class: 'vacio' }, '(sin responder)'),
+        ]),
+      ]),
+      s.nota ? h('p', { class: 'vacio' }, s.nota) : null,
+    ]));
 }
 
-function etapa5(ctx) {
-  const secs = seccionesRespaldo(ctx.perfil.personaje);
-  const previa = h('div', { hidden: true, id: 'previa-respaldo', 'aria-live': 'polite' });
-  const btnPrevia = h('button', { type: 'button', class: 'btn btn--azul', 'aria-expanded': 'false', 'aria-controls': 'previa-respaldo' }, 'Vista previa del documento');
-  btnPrevia.addEventListener('click', () => {
-    const abrir = previa.hidden;
-    previa.hidden = !abrir;
-    btnPrevia.setAttribute('aria-expanded', String(abrir));
-    btnPrevia.textContent = abrir ? 'Ocultar vista previa' : 'Vista previa del documento';
-    if (abrir) { previa.replaceChildren(vistaPreviaDocumento(ctx)); sonar.papel(); }
-  });
-  ctx.alActualizar(() => { if (!previa.hidden) previa.replaceChildren(vistaPreviaDocumento(ctx)); });
-
-  const btnReunir = h('button', { type: 'button', class: 'btn', disabled: !ctx.editable }, 'Reunir mis respuestas en el documento');
-  btnReunir.addEventListener('click', async () => {
-    const compilado = reunirRespaldo(ctx.perfil.personaje, ctx.resp);
-    const cambios = secs.filter((s) => compilado[s.campo] && compilado[s.campo] !== (ctx.resp[s.campo] || ''));
-    if (!cambios.length) { avisar('No hay respuestas nuevas para reunir.'); return; }
-    const reemplaza = cambios.some((s) => String(ctx.resp[s.campo] || '').trim());
-    if (reemplaza) {
-      const ok = await confirmar({
-        titulo: '¿Reemplazar el texto del respaldo?',
-        mensaje: 'Algunas secciones ya tienen texto. Si continúas, se reemplazará por lo que escribiste en tus respuestas de las etapas anteriores.',
-        ok: 'Reemplazar', cancelar: 'Cancelar',
-      });
-      if (!ok) return;
-    }
-    for (const s of cambios) {
-      ctx.cambiar(s.campo, compilado[s.campo]);
-      const ta = document.getElementById(s.campo);
-      if (ta) { ta.value = compilado[s.campo]; autoajustar(ta); }
-    }
-    avisar('Reuní tus respuestas. Revisa cada sección y edítala como necesites.', 'ok');
-  });
-
-  return h('article', { class: 'hoja hoja--ancha', 'aria-labelledby': 'titulo-etapa' },
-    decoracion(),
-    cabecera(5, ctx, 'PREPARA LA CONTINUIDAD DE TU AUDIENCIA'),
-    avisoEdicionCerrada(ctx),
-    h('p', { class: 'intro' }, RESPALDO_INTRO),
-    h('div', { class: 'aviso aviso--alerta', role: 'note' }, h('span', null, '!'), h('p', null, RESPALDO_ADVERTENCIA)),
-    h('div', { class: 'respaldo-barra' }, btnReunir, btnPrevia),
-    previa,
-    secs.map((s) => crearCampo({ id: s.campo, etiqueta: s.titulo, ayuda: s.ayuda, filas: 6 }, ctx)),
-    pie(5, ctx));
+function respuestasAnteriores(ctx) {
+  const lista = respuestasHeredadas(ctx.perfil.personaje, ctx.resp);
+  if (!lista.length) return null;
+  return h('details', { class: 'ayuda', style: { marginBottom: '1.6rem' } },
+    h('summary', null, `Respuestas de la versión anterior de la plataforma (${lista.length})`),
+    h('div', null,
+      h('p', null, 'La plataforma se simplificó. Estas respuestas tuyas ya no se piden y no aparecen en el Word, pero se conservan: puedes copiar lo que te sirva en las preguntas actuales.'),
+      lista.map((x) => h('div', { class: 'adm-qa' }, h('p', null, h('strong', null, x.etiqueta)), h('p', { style: { whiteSpace: 'pre-wrap' } }, x.texto)))));
 }
 
-/* ============================== ETAPA 6 ============================== */
-
-function etapa6(ctx) {
+function etapa4(ctx) {
   const { acciones } = ctx;
   const listaEtapas = h('ul', { class: 'resumen-etapas' });
   const listaPend = h('ul', { class: 'pendientes' });
@@ -376,6 +351,16 @@ function etapa6(ctx) {
   const alertaDecision = h('div');
   const fichaDatos = h('dl', { class: 'ficha__datos' });
   const bloqueEntrega = h('div');
+
+  const previa = h('div', { hidden: true, id: 'previa-documento', 'aria-live': 'polite' });
+  const btnPrevia = h('button', { type: 'button', class: 'btn btn--secundario', 'aria-expanded': 'false', 'aria-controls': 'previa-documento' }, 'Ver mi documento');
+  btnPrevia.addEventListener('click', () => {
+    const abrir = previa.hidden;
+    previa.hidden = !abrir;
+    btnPrevia.setAttribute('aria-expanded', String(abrir));
+    btnPrevia.textContent = abrir ? 'Ocultar mi documento' : 'Ver mi documento';
+    if (abrir) { previa.replaceChildren(vistaPreviaDocumento(ctx)); sonar.papel(); }
+  });
 
   const pintar = () => {
     const pr = ctx.progreso();
@@ -390,7 +375,7 @@ function etapa6(ctx) {
         ['Último guardado', ctx.ultimoGuardado() ? fechaHora(ctx.ultimoGuardado()) : 'Aún no hay guardados en esta sesión'],
       ].map(([t, d]) => h('div', null, h('dt', null, t), h('dd', null, d))));
 
-    listaEtapas.replaceChildren(...ETAPAS.filter((e) => e.n < 6).map((e) => {
+    listaEtapas.replaceChildren(...ETAPAS.filter((e) => e.n < ETAPA_REVISION).map((e) => {
       const x = pr.etapas[e.n];
       const estado = x.bloqueada ? 'Pendiente de asignación' : x.completa ? 'Completa' : x.total ? `${x.hechos} de ${x.total}` : '—';
       const clase = x.completa ? 'chip--verde' : x.bloqueada ? 'chip--gris' : x.iniciada ? 'chip--ambar' : 'chip--gris';
@@ -400,7 +385,7 @@ function etapa6(ctx) {
     }));
 
     listaPend.replaceChildren(...pr.pendientes.map((x) => h('li', null,
-      h('a', { href: `#/etapa/${x.etapa}`, onclick: () => ctx.irACampo(x.etapa, x.id) }, x.etiqueta))));
+      h('a', { href: `#/etapa/${x.etapa}`, onclick: () => ctx.irACampo(x.etapa, x.id) }, `Etapa ${x.etapa}: ${x.etiqueta}`))));
     bloquePend.replaceChildren(pr.pendientes.length
       ? h('div', null, h('h2', null, `Respuestas pendientes (${pr.pendientes.length})`), listaPend)
       : h('div', { class: 'aviso aviso--ok' }, h('span', null, '✓'), h('p', null, 'No quedan respuestas pendientes. Puedes revisar una última vez y entregar.')));
@@ -423,6 +408,7 @@ function etapa6(ctx) {
       ].filter(Boolean)
       : []));
     btnEntregar.textContent = entregada ? 'ENTREGAR NUEVAMENTE ESTA VERSIÓN' : 'MARCAR PREPARACIÓN COMO ENTREGADA';
+    if (!previa.hidden) previa.replaceChildren(vistaPreviaDocumento(ctx));
   };
 
   const btn = (texto, fn, clase = '', extra = {}) => {
@@ -433,7 +419,7 @@ function etapa6(ctx) {
   const btnEntregar = btn('MARCAR PREPARACIÓN COMO ENTREGADA', async () => { await acciones.entregar(); pintar(); }, '', { disabled: !ctx.editable });
 
   const checks = h('fieldset', { class: 'comprobaciones', style: { border: 0, padding: 0, margin: '0 0 1.6rem' } },
-    h('legend', { class: 'rotulo' }, 'Comprobaciones (son orientadoras: no son notas)'),
+    h('legend', { class: 'rotulo' }, 'Comprobación final (orientadora: no es nota)'),
     COMPROBACIONES.map((c) => {
       const i = h('input', { type: 'checkbox', checked: ctx.resp[c.id] === 'si', disabled: !ctx.editable, id: c.id });
       i.addEventListener('change', () => ctx.cambiar(c.id, i.checked ? 'si' : 'no'));
@@ -445,14 +431,19 @@ function etapa6(ctx) {
 
   return h('article', { class: 'hoja hoja--lectura', 'aria-labelledby': 'titulo-etapa' },
     decoracion(),
-    cabecera(6, ctx, 'EXPEDIENTE LISTO PARA REVISIÓN'),
+    cabecera(ETAPA_REVISION, ctx, 'REVISO Y DESCARGO'),
     avisoEdicionCerrada(ctx),
     h('h2', null, 'Resumen de tu expediente'),
     fichaDatos,
-    h('h2', { style: { marginTop: '1.4rem' } }, 'Etapas realizadas'),
+    h('h2', { style: { marginTop: '1.4rem' } }, 'Etapas'),
     listaEtapas,
     alertaDecision,
     bloquePend,
+    h('h2', null, 'Mi documento'),
+    h('p', null, 'El Word reúne tus respuestas en tres secciones: A. Mi personaje, B. Antecedentes del caso y C. Preparación para la audiencia. Es tu preparación individual y tu apoyo durante el juicio; si no pudieras asistir, también sirve de respaldo. Se arma solo con lo que escribiste.'),
+    h('div', { class: 'grupo-botones', style: { marginBottom: '1rem' } }, btnPrevia),
+    previa,
+    respuestasAnteriores(ctx),
     checks,
     bloqueEntrega,
     h('div', { class: 'acciones-entrega' },
@@ -465,7 +456,7 @@ function etapa6(ctx) {
         btnEntregar),
       h('p', { class: 'campo__ayuda' }, ctx.config.reglasEntrega || ''),
       ctx.config.fechaLimite ? h('p', { class: 'campo__ayuda' }, `Fecha límite de preparación: ${soloFecha(ctx.config.fechaLimite)}.`) : null),
-    pie(6, ctx));
+    pie(ETAPA_REVISION, ctx));
 }
 
 /* ============================== Despachador ============================== */
@@ -476,8 +467,6 @@ export function renderEtapa(n, ctx) {
     case 2: return etapa2(ctx);
     case 3: return etapa3(ctx);
     case 4: return etapa4(ctx);
-    case 5: return etapa5(ctx);
-    case 6: return etapa6(ctx);
     default: return h('p', null, 'Etapa no encontrada.');
   }
 }

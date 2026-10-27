@@ -9,7 +9,7 @@
 import {
   h, montar, normalizar, aCSV, rutaImg, descargarTexto, descargarBlob, fechaHora, fechaCorta, hace,
 } from './util.js';
-import { ETAPAS, PERSONAJES, LISTA_PERSONAJES, CASOS } from './contenido.js';
+import { ETAPAS, ETAPA_REVISION, PERSONAJES, LISTA_PERSONAJES, CASOS, respuestasHeredadas } from './contenido.js';
 import { ETIQUETA_ESTADO } from './progreso.js';
 import {
   RUBRICA, PUNTAJE_TOTAL, ESCALA_PREDETERMINADA, acotarPuntaje, totalPuntos, criteriosPendientes, calcularNota, formatearNota,
@@ -172,7 +172,7 @@ function tablaProgreso(lista, { completa = false } = {}) {
     h('thead', null, h('tr', null,
       ['Estudiante', 'Caso', 'Personaje', 'Estado', 'Avance', 'Último guardado', 'Entrega', ...(completa ? ['Etapas pendientes'] : []), ''].map((x) => h('th', { scope: 'col' }, x)))),
     h('tbody', null, lista.map((f) => {
-      const pend = ETAPAS.filter((e) => e.n < 6).filter((e) => { const x = f.progreso.etapas[e.n]; return !x.bloqueada && x.total && !x.completa; }).map((e) => e.n);
+      const pend = ETAPAS.filter((e) => e.n < ETAPA_REVISION).filter((e) => { const x = f.progreso.etapas[e.n]; return !x.bloqueada && x.total && !x.completa; }).map((e) => e.n);
       return h('tr', null,
         h('td', null, h('strong', null, nombreFila(f)), f.perfil.activo === false ? h('span', { class: 'chip chip--rojo' }, 'suspendida') : null),
         h('td', null, f.perfil.caso ? `Caso ${f.perfil.caso}` : '—'),
@@ -261,7 +261,7 @@ function vistaDetalle(uid) {
       f.perfil.caso ? `Caso ${f.perfil.caso}` : 'Sin caso', ' · ', PERSONAJES[f.perfil.personaje]?.nombre || 'sin personaje', ' · ', f.perfil.curso || ''),
     f.conCambiosPosteriores ? h('div', { class: 'aviso aviso--alerta' }, h('span', null, '!'), h('p', null, `El estudiante editó después de entregar${f.expediente?.ultimaEdicionPosterior ? ` (${fechaHora(f.expediente.ultimaEdicionPosterior)})` : ''}. La versión entregada se conserva abajo.`)) : null,
     h('div', { class: 'adm-tarjetas' },
-      tarjeta(`${f.progreso.pct} %`, 'avance (etapas 1 a 5)'),
+      tarjeta(`${f.progreso.pct} %`, `avance (etapas 1 a ${ETAPA_REVISION - 1})`),
       tarjeta(f.entregadoEn ? fechaHora(f.entregadoEn) : '—', 'fecha de entrega'),
       tarjeta(f.ultimoGuardado ? fechaHora(f.ultimoGuardado) : '—', 'último guardado')),
     h('div', { class: 'adm-barra-herramientas' },
@@ -273,7 +273,7 @@ function vistaDetalle(uid) {
         try { await docente.actualizarEstudiante(uid, { cerrado: cerrar }); await api.recargar(); } catch (e) { avisar(e.message, 'error'); }
       } }, f.perfil.cerrado ? 'Reabrir edición de este estudiante' : 'Cerrar edición de este estudiante')),
     h('h3', null, 'Avance por etapa'),
-    h('ul', { class: 'resumen-etapas' }, ETAPAS.filter((e) => e.n < 6).map((e) => {
+    h('ul', { class: 'resumen-etapas' }, ETAPAS.filter((e) => e.n < ETAPA_REVISION).map((e) => {
       const x = f.progreso.etapas[e.n];
       return h('li', null, h('span', null, h('strong', null, `${e.n}. ${e.titulo}`)),
         h('span', { class: `chip ${x.completa ? 'chip--verde' : x.bloqueada ? 'chip--gris' : x.iniciada ? 'chip--ambar' : 'chip--gris'}` }, x.bloqueada ? 'Sin personaje' : x.total ? `${x.hechos} de ${x.total}` : '—'));
@@ -287,7 +287,14 @@ function vistaDetalle(uid) {
       s.bloques.map((b) => [
         b.subtitulo ? h('h5', null, b.subtitulo) : null,
         b.campos.map((c) => h('div', { class: 'adm-qa' }, h('p', { class: 'adm-qa__p' }, c.etiqueta), c.respuesta ? h('p', { class: 'adm-qa__r' }, c.respuesta) : h('p', { class: 'adm-qa__vacio' }, '(sin responder)'))),
-      ]))));
+      ]))),
+    (() => {
+      const anteriores = respuestasHeredadas(f.perfil.personaje, resp);
+      if (!anteriores.length) return null;
+      return h('details', { class: 'ayuda' },
+        h('summary', null, `Respuestas de la versión anterior de la plataforma (${anteriores.length}) — no se piden ni van al Word`),
+        h('div', null, anteriores.map((x) => h('div', { class: 'adm-qa' }, h('p', { class: 'adm-qa__p' }, x.etiqueta), h('p', { class: 'adm-qa__r' }, x.texto)))));
+    })());
 }
 
 /* ============================== EVALUACIÓN ============================== */
@@ -411,7 +418,7 @@ function filasCSVProgreso() {
   return datos.filas.map((f) => [
     f.perfil.apellido, f.perfil.nombre, f.perfil.curso || '', f.perfil.caso || '', PERSONAJES[f.perfil.personaje]?.nombre || '',
     ETIQUETA_ESTADO[f.estado], f.progreso.pct, f.progreso.hechos, f.progreso.total,
-    ...ETAPAS.filter((e) => e.n < 6).map((e) => { const x = f.progreso.etapas[e.n]; return x.bloqueada ? 'sin personaje' : `${x.hechos}/${x.total}`; }),
+    ...ETAPAS.filter((e) => e.n < ETAPA_REVISION).map((e) => { const x = f.progreso.etapas[e.n]; return x.bloqueada ? 'sin personaje' : `${x.hechos}/${x.total}`; }),
     f.ultimoGuardado ? fechaHora(f.ultimoGuardado) : '', f.entregadoEn ? fechaHora(f.entregadoEn) : '', f.conCambiosPosteriores ? 'sí' : '',
   ]);
 }
@@ -446,7 +453,7 @@ function vistaDescargas() {
         } }, 'Descargar todos (ZIP)')),
       h('div', { class: 'adm-descarga' }, h('h3', null, 'CSV de progreso'),
         h('button', { type: 'button', class: 'btn btn--azul', onclick: () => descargarTexto(aCSV(
-          ['Apellido', 'Nombre', 'Curso', 'Caso', 'Personaje', 'Estado', 'Avance %', 'Respondidas', 'Requeridas', ...ETAPAS.filter((e) => e.n < 6).map((e) => `Etapa ${e.n}`), 'Último guardado', 'Entregada', 'Edición posterior'],
+          ['Apellido', 'Nombre', 'Curso', 'Caso', 'Personaje', 'Estado', 'Avance %', 'Respondidas', 'Requeridas', ...ETAPAS.filter((e) => e.n < ETAPA_REVISION).map((e) => `Etapa ${e.n}`), 'Último guardado', 'Entregada', 'Edición posterior'],
           filasCSVProgreso()), `progreso_${hoy}.csv`) }, 'Descargar CSV')),
       h('div', { class: 'adm-descarga' }, h('h3', null, 'CSV de calificaciones'),
         h('button', { type: 'button', class: 'btn btn--azul', onclick: () => descargarTexto(aCSV(

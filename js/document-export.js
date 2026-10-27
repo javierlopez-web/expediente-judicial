@@ -2,13 +2,13 @@
  * EXPORTACIÓN A WORD (.docx real, generado en el navegador con docx.js).
  * La biblioteca (vendor/docx.min.js) se carga solo cuando se descarga el primer documento.
  *
- * El documento contiene: encabezado institucional, datos del estudiante, y las secciones 1 a 5
- * (no incluye la actividad de práctica de la etapa 3 ni las ayudas desplegables).
+ * El documento contiene: encabezado institucional, datos del estudiante y las secciones A (mi personaje),
+ * B (antecedentes) y C (preparación para la audiencia, que sirve también de respaldo de continuidad).
+ * No incluye la práctica de límites, las comprobaciones ni las ayudas desplegables.
  */
 
 import {
-  PERSONAJES, ETAPA1_CAMPOS, ETAPA2_TARJETAS, ETAPA2_DUDAS, ETAPA3_CAMPOS,
-  estructuraEtapa4, seccionesRespaldo, esRequerido, RESPALDO_ADVERTENCIA,
+  PERSONAJES, ETAPA2_TARJETAS, ETAPA2_DUDAS, estructuraParticipacion, esRequerido, RESPALDO_ADVERTENCIA, respuestasVigentes,
 } from './contenido.js';
 import { DATOS_INSTITUCIONALES } from './config.js';
 import { nombreArchivoSeguro, fechaHora, descargarBlob, capitalizar } from './util.js';
@@ -75,50 +75,82 @@ export function construirCorreo({ perfil }) {
 
 const t = (v) => String(v ?? '').trim();
 
-/** Estructura neutra del contenido (sin dependencias de docx) para poder probarla. */
+/**
+ * Estructura neutra del contenido (sin dependencias de docx) para poder probarla y mostrarla al profesor.
+ * Secciones: A. Mi personaje · B. Antecedentes del caso · C. Preparación para la audiencia.
+ * La sección C es, a la vez, el respaldo de continuidad: se arma SOLO con lo que el estudiante escribió.
+ * Las preguntas opcionales vacías se omiten; las obligatorias vacías se marcan «(sin responder)».
+ */
 export function armarContenido({ perfil, respuestas = {}, expediente }) {
-  const resp = respuestas;
   const p = PERSONAJES[perfil?.personaje] || null;
+  const resp = respuestasVigentes(perfil?.personaje, respuestas);
   const secciones = [];
 
-  const campo = (def, extra = {}) => {
-    let respuesta = t(resp[def.id]);
-    if (def.tipo === 'eleccion') respuesta = def.opciones.find((o) => o.valor === resp[def.id])?.texto || '';
-    let etiqueta = def.etiqueta;
-    if (def.refPregunta && t(resp[def.refPregunta])) etiqueta += ` (a tu pregunta: «${t(resp[def.refPregunta])}»)`;
-    return { etiqueta, respuesta, opcional: def.opcional === true || (def.condicional && !esRequerido(def, resp)), ...extra };
-  };
+  const valor = (def) => (def.tipo === 'eleccion' ? def.opciones.find((o) => o.valor === resp[def.id])?.texto || '' : t(resp[def.id]));
+  const requerido = (def) => esRequerido(def, resp);
 
-  if (p) secciones.push({ titulo: '1. Mi función', bloques: [{ campos: ETAPA1_CAMPOS.map((c) => campo(c)) }] });
+  // A. Mi personaje
+  secciones.push(p
+    ? { titulo: 'A. Mi personaje', bloques: [{ campos: [
+      { etiqueta: `Mi función como ${p.nombre} y lo que haré en el juicio`, respuesta: t(resp.e1_funcion) },
+      { etiqueta: 'Información y límites que debo respetar', respuesta: t(resp.e1_limites) },
+    ] }] }
+    : { titulo: 'A. Mi personaje', bloques: [], vacio: 'Pendiente de asignación de personaje.' });
+
+  // B. Antecedentes del caso (una tabla por antecedente)
   secciones.push({
-    titulo: p ? '2. Los antecedentes' : '1. Los antecedentes',
-    bloques: [
-      ...ETAPA2_TARJETAS.map((tj) => ({ subtitulo: `Antecedente ${tj.n}`, campos: tj.campos.map((c) => campo(c)) })),
-      { campos: [campo(ETAPA2_DUDAS)] },
-    ],
+    titulo: 'B. Antecedentes del caso',
+    bloques: [{ campos: [
+      ...ETAPA2_TARJETAS.map((tj) => {
+        const [ant, permite, limite] = tj.campos.map((c) => t(resp[c.id]));
+        const algo = ant || permite || limite;
+        return {
+          etiqueta: `Antecedente ${tj.n}${ant ? `: ${ant}` : ''}`,
+          respuesta: algo ? [`Permite afirmar: ${permite || '(sin responder)'}`, `No permite concluir: ${limite || '(sin responder)'}`].join('\n') : '',
+        };
+      }),
+      { etiqueta: 'Duda importante sobre el caso', respuesta: t(resp[ETAPA2_DUDAS.id]) },
+    ] }],
   });
-  secciones.push({
-    titulo: p ? '3. Los límites de mi personaje' : '2. Los límites de mi personaje',
-    bloques: [{ campos: p ? ETAPA3_CAMPOS.map((c) => campo(c)) : [] }],
-    vacio: p ? null : 'Pendiente de asignación de personaje.',
-  });
+
+  // C. Preparación para la audiencia (adaptada al personaje)
   if (p) {
-    const est = estructuraEtapa4(perfil.personaje);
-    secciones.push({
-      titulo: `4. Mi preparación — ${est.titulo}`,
-      bloques: est.apartados
-        .filter((a) => typeof a.condicion !== 'function' || a.condicion(resp))
-        .map((a) => ({ subtitulo: `${a.numero}. ${a.titulo}`, campos: a.campos.map((c) => campo(c)) })),
-    });
-    secciones.push({
-      titulo: '5. Mi respaldo de continuidad',
-      bloques: [{ campos: seccionesRespaldo(perfil.personaje).map((s) => campo({ id: s.campo, etiqueta: s.titulo })) }],
-      nota: RESPALDO_ADVERTENCIA,
-    });
+    const est = estructuraParticipacion(perfil.personaje);
+    const bloques = [];
+    for (const a of est.apartados) {
+      if (a.presentacion === 'lista') {
+        const escritas = a.campos.map((c) => t(resp[c.id]));
+        const obligatorio = a.campos.some(requerido);
+        if (!escritas.some(Boolean) && !obligatorio) continue;
+        const lineas = escritas.some(Boolean)
+          ? a.campos.map((c, i) => escritas[i] || (requerido(c) ? '(sin responder)' : '')).filter(Boolean)
+          : [];
+        bloques.push({ campos: [{ etiqueta: a.titulo, respuesta: lineas.map((q, i) => `${i + 1}. ${q}`).join('\n'), lista: true }] });
+      } else if (a.presentacion === 'pares') {
+        const campos = [];
+        for (let i = 0; i < a.campos.length; i += 2) {
+          const [dp, dr] = [a.campos[i], a.campos[i + 1]];
+          const q = t(resp[dp.id]);
+          const r = t(resp[dr.id]);
+          if (!q && !r && !requerido(dp)) continue;
+          campos.push({ etiqueta: q ? `Pregunta posible: «${q}»` : `Pregunta posible ${i / 2 + 1} (sin escribir)`, respuesta: r });
+        }
+        if (campos.length) bloques.push({ subtitulo: a.titulo, campos });
+      } else {
+        const campos = a.campos
+          .filter((c) => requerido(c) || valor(c))
+          .map((c) => ({ etiqueta: c.etiqueta, respuesta: valor(c) }));
+        if (campos.length) bloques.push({ campos });
+      }
+    }
+    secciones.push({ titulo: `C. Preparación para la audiencia — ${est.titulo}`, bloques, nota: RESPALDO_ADVERTENCIA });
+  } else {
+    secciones.push({ titulo: 'C. Preparación para la audiencia', bloques: [], vacio: 'Pendiente de asignación de personaje.' });
   }
 
   const entregada = Boolean(expediente?.entregadoEn);
   const datos = [
+    ['Establecimiento', DATOS_INSTITUCIONALES.establecimiento],
     ['Estudiante', perfil?.nombreMostrar || `${perfil?.nombre || ''} ${perfil?.apellido || ''}`.trim()],
     ['Curso', perfil?.curso || ''],
     ['Caso', perfil?.caso ? `Caso ${perfil.caso}` : 'Pendiente de asignación'],

@@ -1,12 +1,12 @@
 /**
  * ESPACIO DEL ESTUDIANTE: ingreso, bienvenida, tablero de corcho, instrucciones y marco de las etapas.
- * Las seis etapas se dibujan en ui-etapas.js.
+ * Las cuatro etapas se dibujan en ui-etapas.js.
  */
 
 import { h, montar, qs, esperar, movimientoReducido, fechaHora, rutaImg } from './util.js';
 import {
-  ETAPAS, PERSONAJES, TEXTOS, INSTRUCCIONES, CASOS, etiquetaDeCampo,
-  PERSONAJES_CON_IMAGEN,
+  ETAPAS, ETAPA_REVISION, PERSONAJES, TEXTOS, INSTRUCCIONES, CASOS, etiquetaDeCampo,
+  PERSONAJES_CON_IMAGEN, migrarRespuestas,
 } from './contenido.js';
 import { DATOS_INSTITUCIONALES } from './config.js';
 import { calcularProgreso, estadoDe, etapaBloqueada, ETIQUETA_ESTADO, decisionesAnticipadas } from './progreso.js';
@@ -350,6 +350,7 @@ export async function prepararSesion(sesion) {
   });
   S.expediente = exp;
   S.resp = { ...(exp.respuestas || {}) };
+  aplicarMigracion();
   recalcular();
   if (exp.hayCambiosRecuperados) {
     setTimeout(() => avisar('Recuperamos cambios que no alcanzaron a enviarse la última vez. Se están guardando.', 'info', 7000), 600);
@@ -357,11 +358,27 @@ export async function prepararSesion(sesion) {
   return true;
 }
 
+/**
+ * Respuestas escritas en la versión anterior (6 etapas) que cambiaron de pregunta: se trasladan a las preguntas
+ * nuevas. Se guardan solo si el expediente es editable y no está entregado (para no marcar una «edición posterior»);
+ * en otro caso se aplican únicamente en pantalla. Las respuestas antiguas nunca se borran.
+ */
+function aplicarMigracion() {
+  if (!S.perfil?.personaje || !S.resp) return;
+  const { cambios } = migrarRespuestas(S.perfil.personaje, S.resp);
+  const ids = Object.keys(cambios);
+  if (!ids.length) return;
+  Object.assign(S.resp, cambios);
+  if (editable() && !S.expediente?.entregadoEn) {
+    for (const id of ids) { try { sv.guardarRespuesta(id, cambios[id]); } catch (e) { console.error(e); } }
+  }
+}
+
 async function refrescarPerfil() {
   if (!S.sesion) return;
   try {
     const [config, perfil] = await Promise.all([sv.cargarConfig(), sv.cargarPerfil(S.sesion.uid)]);
-    if (perfil) { S.perfil = perfil; }
+    if (perfil) { S.perfil = perfil; aplicarMigracion(); }
     if (config) { S.config = config; audio.configurar({ sonidosPermitidos: config.sonidosPermitidos !== false, sonidoVolumen: config.sonidoVolumen }); }
     recalcular();
   } catch { /* sin red: se sigue con lo que hay */ }
@@ -486,7 +503,8 @@ async function pantallaBienvenida(vista) {
     h('div', { class: 'polaroid__pie' }, personaje ? personaje.nombre : 'Sin asignar'),
     h('img', { class: 'polaroid__chinche', src: img('chinche'), alt: '', 'aria-hidden': 'true' }));
 
-  const destino = !personaje ? '#/tablero' : `#/etapa/${S.expediente?.etapaActual && !etapaBloqueada(S.expediente.etapaActual, p) ? S.expediente.etapaActual : 1}`;
+  const etapaGuardada = Math.min(Number(S.expediente?.etapaActual) || 1, ETAPAS.length);
+  const destino = !personaje ? '#/tablero' : `#/etapa/${!etapaBloqueada(etapaGuardada, p) ? etapaGuardada : 1}`;
   const hoja = h('article', { class: 'hoja hoja--lectura', 'aria-labelledby': 'titulo-bienvenida', style: { animation: 'none' } },
     h('img', { class: 'hoja__cinta', src: img('cinta'), alt: '', 'aria-hidden': 'true' }),
     h('p', { class: 'etiqueta-juridica' }, `${DATOS_INSTITUCIONALES.establecimiento} · ${DATOS_INSTITUCIONALES.asignatura}`),
@@ -494,7 +512,7 @@ async function pantallaBienvenida(vista) {
     S.config.mensajeGeneral ? h('div', { class: 'nota-profesor' }, h('p', { class: 'etiqueta-juridica' }, 'Mensaje del profesor'), h('p', { style: { margin: 0, whiteSpace: 'pre-wrap' } }, S.config.mensajeGeneral)) : null,
     !editable() ? h('div', { class: 'aviso aviso--alerta' }, h('span', null, '!'), h('p', null, 'La edición está cerrada por ahora. Puedes revisar tu expediente.')) : null,
     h('div', { class: 'ficha' }, polaroid, ficha),
-    !personaje ? h('div', { class: 'aviso aviso--info' }, h('span', null, 'i'), h('p', null, 'Tu caso y tu personaje aún no están asignados. Mientras tanto puedes avanzar en las etapas generales (los antecedentes y la actividad de límites).')) : null,
+    !personaje ? h('div', { class: 'aviso aviso--info' }, h('span', null, 'i'), h('p', null, 'Tu caso y tu personaje aún no están asignados. Mientras tanto puedes avanzar en la etapa 2 (antecedentes) y en la práctica de límites de la etapa 1.')) : null,
     h('div', { class: 'grupo-botones', style: { marginTop: '1.4rem' } },
       h('a', { class: 'btn', href: destino }, 'CONTINUAR MI PREPARACIÓN'),
       h('a', { class: 'btn btn--secundario', href: '#/instrucciones' }, 'VER INSTRUCCIONES')),
@@ -549,20 +567,20 @@ function pantallaTablero(vista) {
     const bloqueada = etapaBloqueada(e.n, p);
     const x = pr.etapas[e.n];
     let detalle;
-    if (e.n === 6) detalle = S.expediente?.entregadoEn ? `Entregada el ${fechaHora(S.expediente.entregadoEn)}` : 'Revisa y entrega';
+    if (e.n === ETAPA_REVISION) detalle = S.expediente?.entregadoEn ? `Entregada el ${fechaHora(S.expediente.entregadoEn)}` : 'Revisa y entrega';
     else if (bloqueada) detalle = TEXTOS.pendienteAsignacion;
     else if (x.completa) detalle = 'Completa';
     else if (x.total) detalle = `${x.hechos} de ${x.total} respuestas`;
     else detalle = 'Por comenzar';
-    const completa = e.n === 6 ? Boolean(S.expediente?.entregadoEn) : x.completa;
+    const completa = e.n === ETAPA_REVISION ? Boolean(S.expediente?.entregadoEn) : x.completa;
     const hijos = [
       h('img', { class: 'nota__chinche', src: img('chinche'), alt: '', 'aria-hidden': 'true' }),
       h('span', { class: 'nota__num' }, `Etapa ${e.n}`),
       h('span', { class: 'nota__titulo' }, e.titulo),
       h('span', { class: 'nota__estado' }, detalle),
       h('span', { class: 'nota__desc' }, e.descripcion),
-      e.n < 6 && !bloqueada ? barraProgreso(x.pct, `Avance de la etapa ${e.n}`) : null,
-      completa ? h('span', { class: 'nota__sello' }, e.n === 6 ? 'Entregada' : 'Completa') : null,
+      e.n < ETAPA_REVISION && !bloqueada ? barraProgreso(x.pct, `Avance de la etapa ${e.n}`) : null,
+      completa ? h('span', { class: 'nota__sello' }, e.n === ETAPA_REVISION ? 'Entregada' : 'Completa') : null,
       bloqueada ? h('img', { class: 'nota__sobre', src: img('sobre-cerrado'), alt: '', 'aria-hidden': 'true' }) : null,
     ];
     if (bloqueada) {
@@ -592,7 +610,7 @@ function pantallaTablero(vista) {
         h('h1', { id: 'titulo-etapa', tabindex: '-1' }, 'MI TABLERO DE PREPARACIÓN'),
         h('p', { style: { margin: 0 } }, chipEstado(estado, Boolean(S.expediente?.editadoDespuesDeEntrega)), ' ', p.nombreMostrar)),
       h('div', { class: 'progreso-global' },
-        h('div', { class: 'progreso-global__texto' }, h('span', null, 'Avance de las etapas 1 a 5'), h('span', null, `${pr.pct} %`)),
+        h('div', { class: 'progreso-global__texto' }, h('span', null, `Avance de las etapas 1 a ${ETAPA_REVISION - 1}`), h('span', null, `${pr.pct} %`)),
         barra)),
     S.config.mensajeGeneral ? h('div', { class: 'nota-profesor' }, h('p', { class: 'etiqueta-juridica' }, 'Mensaje del profesor'), h('p', { style: { margin: 0, whiteSpace: 'pre-wrap' } }, S.config.mensajeGeneral)) : null,
     !editable() ? h('div', { class: 'aviso aviso--alerta' }, h('span', null, '!'), h('p', null, 'La edición está cerrada. Puedes leer y descargar tu expediente.')) : null,
@@ -614,9 +632,9 @@ function riel(n) {
     h('ol', null, ETAPAS.map((e) => {
       const bloqueada = etapaBloqueada(e.n, S.perfil);
       const x = pr.etapas[e.n];
-      const estado = bloqueada ? 'bloqueada' : (e.n === 6 ? (S.expediente?.entregadoEn ? 'completa' : '') : x.completa ? 'completa' : x.iniciada ? 'iniciada' : '');
+      const estado = bloqueada ? 'bloqueada' : (e.n === ETAPA_REVISION ? (S.expediente?.entregadoEn ? 'completa' : '') : x.completa ? 'completa' : x.iniciada ? 'iniciada' : '');
       const contenido = [h('span', { class: 'riel__pin' }, estado === 'completa' ? '✓' : String(e.n)), h('span', null, e.titulo,
-        h('span', { class: 'riel__sub' }, bloqueada ? TEXTOS.pendienteAsignacion : e.n < 6 ? (x.total ? `${x.hechos} de ${x.total}` : '') : ''))];
+        h('span', { class: 'riel__sub' }, bloqueada ? TEXTOS.pendienteAsignacion : e.n < ETAPA_REVISION ? (x.total ? `${x.hechos} de ${x.total}` : '') : ''))];
       const li = h('li', { 'data-estado': estado });
       if (bloqueada) {
         const b = h('button', { type: 'button', 'aria-disabled': 'true' }, contenido);
@@ -646,7 +664,7 @@ function pantallaEtapa(vista, n) {
   if (bloqueada) {
     montar(vista, h('div', { class: 'hoja hoja--lectura' },
       h('h1', { id: 'titulo-etapa', tabindex: '-1' }, etapa.titulo),
-      h('div', { class: 'aviso aviso--info' }, h('span', null, 'i'), h('p', null, 'Esta etapa se habilita cuando el profesor te asigne tu caso y tu personaje. Mientras tanto puedes trabajar en las etapas 2 y 3.')),
+      h('div', { class: 'aviso aviso--info' }, h('span', null, 'i'), h('p', null, 'Esta etapa se habilita cuando el profesor te asigne tu caso y tu personaje. Mientras tanto puedes trabajar en la etapa 2 y en la práctica de la etapa 1.')),
       h('a', { class: 'btn', href: '#/tablero' }, 'Volver al tablero')));
     enfocarTitulo(vista);
     return;
@@ -663,7 +681,7 @@ function pantallaEtapa(vista, n) {
   montar(vista, h('div', { class: 'etapa-layout' }, riel(n), articulo));
   oyentesVista.push(() => { /* el riel se redibuja al cambiar de etapa; el avance se ve en cada etapa */ });
   document.title = `${TEXTOS.tituloApp} · Etapa ${n}: ${etapa.titulo}`;
-  if (n === 5) sonar.clip(); else sonar.chinche();
+  if (n === ETAPA_REVISION) sonar.clip(); else sonar.chinche();
   if (primeraVez) mostrarDesbloqueo();
 
   // Guardar el avance de navegación.
@@ -674,7 +692,7 @@ function pantallaEtapa(vista, n) {
 
   if (irAId) {
     const id = irAId; irAId = null;
-    const el = document.getElementById(id) || qs('.clasificacion input, .clasificacion fieldset', vista);
+    const el = document.getElementById(id);
     if (el) { el.scrollIntoView({ block: 'center' }); el.focus?.({ preventScroll: true }); return; }
   }
   window.scrollTo(0, 0);
