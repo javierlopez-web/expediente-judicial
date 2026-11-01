@@ -308,3 +308,29 @@ export function rutaImg(nombre) {
   const incrustadas = globalThis.__IMAGENES;
   return (incrustadas && incrustadas[nombre]) || `assets/img/${nombre}.webp`;
 }
+
+/* ---------- Ingreso v3: nombre + apellido + código de 4 dígitos ---------- */
+
+/** Deja solo dígitos (el código de ingreso es de 4 números). */
+export const soloDigitos = (s) => String(s ?? '').replace(/\D/g, '');
+export const codigoValido = (s) => /^\d{4}$/.test(soloDigitos(s));
+
+/** Código aleatorio de 4 dígitos, evitando los demasiado obvios. */
+export function codigoAleatorio(usados = new Set()) {
+  for (let i = 0; i < 200; i++) {
+    const c = String(Math.floor(1000 + Math.random() * 9000));
+    if (/^(\d)\1{3}$/.test(c) || c === '1234' || usados.has(c)) continue;
+    return c;
+  }
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
+
+/**
+ * Contraseña técnica de la cuenta (el estudiante nunca la ve): depende del nombre, el apellido y el código.
+ * Cambiar el código = cambiar esta contraseña (lo hace el panel del profesor).
+ */
+export function claveConCodigo(nombre, apellido, codigo) {
+  const n = normalizar(nombre).split(' ')[0] || '';
+  const a = normalizar(apellido).replace(/ /g, '');
+  return `EXPJ.${soloDigitos(codigo)}.${n}.${a}`.toUpperCase();
+}

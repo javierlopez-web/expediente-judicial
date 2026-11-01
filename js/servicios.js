@@ -14,7 +14,7 @@ import { fijarBackend, backend, modoServicios } from './registro.js';
 import { crearBackendFirebase } from './firebase-service.js';
 import { crearBackendLocal } from './local-backend.js';
 import { GestorGuardado } from './guardado.js';
-import { calcularProgreso, estadoDe } from './progreso.js';
+import { avance } from './contenido.js';
 import { aFecha } from './util.js';
 
 export { iniciarSesion, iniciarSesionProfesor, cerrarSesion, observarSesion, textoErrorAuth } from './auth-service.js';
@@ -115,61 +115,44 @@ export function liberarSesion() {
 export const docente = {
   guardarConfig: (c) => backend().guardarConfig(c),
   listarEstudiantes: () => backend().listarEstudiantes(),
-  listarExpedientes: () => backend().listarExpedientes(),
   cargarExpedienteDe: (uid) => backend().cargarExpedienteDe(uid),
-  listarVersiones: (uid) => backend().listarVersiones(uid),
   actualizarEstudiante: (uid, d) => backend().actualizarEstudiante(uid, d),
   crearEstudiantes: (l) => backend().crearEstudiantes(l),
-  suspenderEstudiante: (uid, s) => backend().suspenderEstudiante(uid, s),
-  listarEvaluaciones: () => backend().listarEvaluaciones(),
-  cargarEvaluacion: (uid) => backend().cargarEvaluacion(uid),
-  guardarEvaluacion: (uid, d) => backend().guardarEvaluacion(uid, d),
-  exportarTodo: () => backend().exportarTodo(),
+  cambiarCodigo: (uid, c) => backend().cambiarCodigo(uid, c),
+  eliminarEstudiante: (uid) => backend().eliminarEstudiante(uid),
+  /** Corregir nombre o apellido = crear la cuenta nueva (mismo código y asignación) y eliminar la anterior. */
+  async corregirNombre(perfil, { nombre, apellido }) {
+    const [r] = await backend().crearEstudiantes([{ nombre, apellido, codigo: perfil.codigo, caso: perfil.caso, personaje: perfil.personaje, curso: perfil.curso }]);
+    if (!r || r.estado === 'error') throw Object.assign(new Error(r?.mensaje || 'No se pudo crear la cuenta nueva.'), { code: 'app/crear' });
+    await backend().eliminarEstudiante(perfil.uid);
+    return r;
+  },
   cargarDatosDePrueba: () => backend().cargarDatosDePrueba?.(),
   borrarDatosLocales: () => backend().borrarDatosLocales?.(),
 };
 
-/**
- * Resumen para el tablero y el seguimiento. El progreso se RECALCULA aquí a partir de las respuestas
- * (no se confía en el número que guarda el estudiante).
- */
+export function estadoDe(exp, av) {
+  if (exp?.entregadoEn) return 'entregada';
+  if (!av || av.hechosP + av.hechosD === 0) return 'sin_iniciar';
+  return 'en_desarrollo';
+}
+
+/** Resumen para el panel. El avance se recalcula a partir de las respuestas. */
 export async function obtenerResumenDocente() {
-  const [config, estudiantes, expedientes, evaluaciones] = await Promise.all([
-    backend().cargarConfig(), backend().listarEstudiantes(), backend().listarExpedientes(), backend().listarEvaluaciones(),
+  const [config, estudiantes, expedientes] = await Promise.all([
+    backend().cargarConfig(), backend().listarEstudiantes(), backend().listarExpedientes(),
   ]);
   const expPorUid = new Map(expedientes.map((e) => [e.uid, e]));
-  const evPorUid = new Map(evaluaciones.map((e) => [e.uid, e]));
-
   const filas = estudiantes.map((perfil) => {
     const expediente = expPorUid.get(perfil.uid) || null;
-    const progreso = calcularProgreso(perfil, expediente);
-    const ultimo = aFecha(expediente?.ultimoGuardado);
+    const av = perfil.personaje ? avance(perfil.personaje, expediente?.respuestas || {}) : null;
     return {
-      uid: perfil.uid,
-      perfil,
-      expediente,
-      evaluacion: evPorUid.get(perfil.uid) || null,
-      progreso,
-      estado: estadoDe(expediente),
-      ultimoGuardado: ultimo,
+      uid: perfil.uid, perfil, expediente, avance: av,
+      estado: estadoDe(expediente, av),
+      ultimoGuardado: aFecha(expediente?.ultimoGuardado),
       entregadoEn: aFecha(expediente?.entregadoEn),
       conCambiosPosteriores: Boolean(expediente?.editadoDespuesDeEntrega),
     };
-  });
-
-  const conActividad = filas.map((f) => f.ultimoGuardado).filter(Boolean).sort((a, b) => b - a);
-  const totales = {
-    estudiantes: filas.length,
-    conCuenta: filas.filter((f) => f.perfil.activo !== false).length,
-    conRol: filas.filter((f) => f.perfil.caso && f.perfil.personaje).length,
-    sinIniciar: filas.filter((f) => f.estado === 'sin_iniciar').length,
-    enDesarrollo: filas.filter((f) => f.estado === 'en_desarrollo').length,
-    entregadas: filas.filter((f) => f.estado === 'entregada').length,
-    ultimaActividad: conActividad[0] || null,
-    porCaso: [1, 2, 3].map((n) => {
-      const del = filas.filter((f) => f.perfil.caso === n);
-      return { caso: n, total: del.length, entregadas: del.filter((f) => f.estado === 'entregada').length, enDesarrollo: del.filter((f) => f.estado === 'en_desarrollo').length };
-    }),
-  };
-  return { config, filas, totales };
+  }).sort((a, b) => `${a.perfil.apellido} ${a.perfil.nombre}`.localeCompare(`${b.perfil.apellido} ${b.perfil.nombre}`, 'es'));
+  return { config, filas };
 }

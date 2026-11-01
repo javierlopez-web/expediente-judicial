@@ -3,7 +3,7 @@
 import { backend } from './registro.js';
 
 /**
- * Ingreso del estudiante con nombre + primer apellido (+ código de cuenta solo si el profesor lo entregó).
+ * Ingreso del estudiante con nombre + primer apellido + código de 4 dígitos (lo entrega el profesor).
  * Internamente se traduce a una cuenta de Firebase Authentication; el estudiante no usa correo ni contraseña propia.
  */
 export function iniciarSesion({ nombre, apellido, codigo = '' }) {
@@ -24,8 +24,9 @@ export function observarSesion(cb) {
 
 export function textoErrorAuth(err) {
   const c = String(err?.code || '');
+  if (/app\/codigo/.test(c)) return 'El código tiene 4 números. Si no lo tienes, pídeselo al profesor.';
   if (/invalid-credential|wrong-password|user-not-found|invalid-email|invalid-login/.test(c)) {
-    return 'No encontramos tu expediente. Revisa que tu nombre y tu primer apellido estén escritos como en la lista del curso (mayúsculas, sin tildes). Si tu profesor te dio un código de cuenta, escríbelo en «Tengo un código de cuenta».';
+    return 'No encontramos tu expediente. Revisa tu nombre, tu primer apellido (en MAYÚSCULAS y sin tildes) y tu código de 4 números.';
   }
   if (/user-disabled/.test(c)) return 'Tu acceso está suspendido. Habla con tu profesor.';
   if (/too-many-requests/.test(c)) return 'Se hicieron demasiados intentos. Espera unos minutos e inténtalo de nuevo.';
@@ -33,6 +34,5 @@ export function textoErrorAuth(err) {
   if (/missing-password/.test(c)) return 'Escribe tu correo y tu contraseña.';
   if (/no-profesor/.test(c)) return 'Esta cuenta no tiene permisos de profesor.';
   if (/sin-perfil/.test(c)) return 'Tu cuenta existe, pero todavía no tiene un expediente. Avísale al profesor.';
-  if (/no-disponible/.test(c)) return err.message;
   return 'No se pudo ingresar. Inténtalo de nuevo.';
 }

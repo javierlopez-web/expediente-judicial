@@ -1,31 +1,20 @@
 /**
  * EXPORTACIÓN A WORD (.docx real, generado en el navegador con docx.js).
- * La biblioteca (vendor/docx.min.js) se carga solo cuando se descarga el primer documento.
- *
- * El documento contiene: encabezado institucional, datos del estudiante y las secciones A (mi personaje),
- * B (antecedentes) y C (preparación para la audiencia, que sirve también de respaldo de continuidad).
- * No incluye la práctica de límites, las comprobaciones ni las ayudas desplegables.
+ * El mismo documento lo descarga el estudiante y el profesor (uno por uno o todos en un ZIP).
+ * Contiene solo lo que el estudiante escribió, en el orden de su índice: A, B y C.
  */
 
-import {
-  PERSONAJES, ETAPA2_TARJETAS, ETAPA2_DUDAS, estructuraParticipacion, esRequerido, RESPALDO_ADVERTENCIA, respuestasVigentes,
-} from './contenido.js';
-import { DATOS_INSTITUCIONALES } from './config.js';
+import { PERSONAJES, NOMBRE_CASOS, secciones, idsDe } from './contenido.js';
 import { nombreArchivoSeguro, fechaHora, descargarBlob, capitalizar } from './util.js';
 
 const BURDEOS = '853D37';
 const TINTA = '30271F';
-const GRIS = '6B6258';
-const PAPEL = 'EFE6D2';
-const FUENTE_TITULO = 'Georgia';
-const FUENTE = 'Calibri';
-
-/* ---------- Carga perezosa de docx ---------- */
+const GRIS = '7A6F63';
+const CREMA = 'F3ECDD';
 
 let promesaDocx = null;
 export function cargarDocx() {
   if (globalThis.docx) return Promise.resolve(globalThis.docx);
-  if (globalThis.__cargarIncrustado) { const v = globalThis.__cargarIncrustado('docx'); if (v) return Promise.resolve(v); }
   if (!promesaDocx) {
     promesaDocx = new Promise((resolve, reject) => {
       const s = document.createElement('script');
@@ -38,249 +27,98 @@ export function cargarDocx() {
   return promesaDocx;
 }
 
-/* ---------- Nombres ---------- */
-
 export function nombreArchivo(perfil) {
-  const caso = perfil?.caso ? `Caso-${perfil.caso}` : 'Caso-SinAsignar';
+  const caso = perfil?.caso ? `Caso${perfil.caso}` : 'SinCaso';
+  const per = nombreArchivoSeguro(PERSONAJES[perfil?.personaje]?.nombre || 'SinPersonaje');
   const ape = nombreArchivoSeguro(capitalizar(perfil?.apellido || '')) || 'Apellido';
   const nom = nombreArchivoSeguro(capitalizar(perfil?.nombre || '')) || 'Nombre';
-  return `Preparacion_Juicio_${caso}_${ape}_${nom}.docx`;
+  return `${caso}_${per}_${ape}_${nom}.docx`;
 }
-
-/* ---------- Correo (mailto:; el archivo NO se puede adjuntar automáticamente) ---------- */
-
-export function construirCorreo({ perfil }) {
-  const nombre = perfil?.nombreMostrar || `${perfil?.nombre || ''} ${perfil?.apellido || ''}`.trim();
-  const asunto = `Preparación juicio simulado – ${perfil?.caso ? `Caso ${perfil.caso}` : 'Caso sin asignar'} – ${perfil?.apellido || ''} ${perfil?.nombre || ''}`.replace(/\s+/g, ' ').trim();
-  const cuerpo = [
-    `Estimado profesor ${DATOS_INSTITUCIONALES.profesor}:`,
-    '',
-    `Le envío mi preparación individual para el juicio simulado.`,
-    `Estudiante: ${nombre}`,
-    `Curso: ${perfil?.curso || ''}`,
-    `Caso: ${perfil?.caso || 'sin asignar'}`,
-    `Personaje: ${PERSONAJES[perfil?.personaje]?.nombre || 'sin asignar'}`,
-    '',
-    `Archivo adjunto: ${nombreArchivo(perfil)}`,
-    '(Recuerda adjuntar el archivo Word manualmente antes de enviar.)',
-    '',
-    'Saludos cordiales,',
-    nombre,
-  ].join('\r\n');
-  const href = `mailto:${DATOS_INSTITUCIONALES.correoProfesor}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
-  return { href, asunto, cuerpo };
-}
-
-/* ---------- Contenido ---------- */
 
 const t = (v) => String(v ?? '').trim();
 
-/**
- * Estructura neutra del contenido (sin dependencias de docx) para poder probarla y mostrarla al profesor.
- * Secciones: A. Mi personaje · B. Antecedentes del caso · C. Preparación para la audiencia.
- * La sección C es, a la vez, el respaldo de continuidad: se arma SOLO con lo que el estudiante escribió.
- * Las preguntas opcionales vacías se omiten; las obligatorias vacías se marcan «(sin responder)».
- */
-export function armarContenido({ perfil, respuestas = {}, expediente }) {
-  const p = PERSONAJES[perfil?.personaje] || null;
-  const resp = respuestasVigentes(perfil?.personaje, respuestas);
-  const secciones = [];
-
-  const valor = (def) => (def.tipo === 'eleccion' ? def.opciones.find((o) => o.valor === resp[def.id])?.texto || '' : t(resp[def.id]));
-  const requerido = (def) => esRequerido(def, resp);
-
-  // A. Mi personaje
-  secciones.push(p
-    ? { titulo: 'A. Mi personaje', bloques: [{ campos: [
-      { etiqueta: `Mi función como ${p.nombre} y lo que haré en el juicio`, respuesta: t(resp.e1_funcion) },
-      { etiqueta: 'Información y límites que debo respetar', respuesta: t(resp.e1_limites) },
-    ] }] }
-    : { titulo: 'A. Mi personaje', bloques: [], vacio: 'Pendiente de asignación de personaje.' });
-
-  // B. Antecedentes del caso (una tabla por antecedente)
-  secciones.push({
-    titulo: 'B. Antecedentes del caso',
-    bloques: [{ campos: [
-      ...ETAPA2_TARJETAS.map((tj) => {
-        const [ant, permite, limite] = tj.campos.map((c) => t(resp[c.id]));
-        const algo = ant || permite || limite;
-        return {
-          etiqueta: `Antecedente ${tj.n}${ant ? `: ${ant}` : ''}`,
-          respuesta: algo ? [`Permite afirmar: ${permite || '(sin responder)'}`, `No permite concluir: ${limite || '(sin responder)'}`].join('\n') : '',
-        };
-      }),
-      { etiqueta: 'Duda importante sobre el caso', respuesta: t(resp[ETAPA2_DUDAS.id]) },
-    ] }],
-  });
-
-  // C. Preparación para la audiencia (adaptada al personaje)
-  if (p) {
-    const est = estructuraParticipacion(perfil.personaje);
-    const bloques = [];
-    for (const a of est.apartados) {
-      if (a.presentacion === 'lista') {
-        const escritas = a.campos.map((c) => t(resp[c.id]));
-        const obligatorio = a.campos.some(requerido);
-        if (!escritas.some(Boolean) && !obligatorio) continue;
-        const lineas = escritas.some(Boolean)
-          ? a.campos.map((c, i) => escritas[i] || (requerido(c) ? '(sin responder)' : '')).filter(Boolean)
-          : [];
-        bloques.push({ campos: [{ etiqueta: a.titulo, respuesta: lineas.map((q, i) => `${i + 1}. ${q}`).join('\n'), lista: true }] });
-      } else if (a.presentacion === 'pares') {
-        const campos = [];
-        for (let i = 0; i < a.campos.length; i += 2) {
-          const [dp, dr] = [a.campos[i], a.campos[i + 1]];
-          const q = t(resp[dp.id]);
-          const r = t(resp[dr.id]);
-          if (!q && !r && !requerido(dp)) continue;
-          campos.push({ etiqueta: q ? `Pregunta posible: «${q}»` : `Pregunta posible ${i / 2 + 1} (sin escribir)`, respuesta: r });
+/** Estructura neutra (sin docx) del documento: también la usa el panel para «Ver». */
+export function estructuraDocumento(perfil, resp = {}) {
+  const clave = perfil?.personaje;
+  const out = [];
+  for (const s of secciones(clave)) {
+    if (!s.campos.length) continue;
+    const algo = s.campos.some((c) => idsDe(c).some((id) => t(resp[id])));
+    if (s.despues && !algo) continue; // el bloque C solo aparece si tiene algo escrito
+    out.push({
+      titulo: s.titulo,
+      campos: s.campos.map((c) => {
+        if (c.tipo === 'texto') return { titulo: c.titulo, tipo: 'texto', valor: t(resp[c.id]) };
+        if (c.tipo === 'opciones') return { titulo: c.titulo, tipo: 'texto', valor: (c.opciones.find(([v]) => v === resp[c.id]) || [])[1] || '' };
+        if (c.tipo === 'lista') return { titulo: c.titulo, tipo: 'lista', items: idsDe(c).map((id) => t(resp[id])).filter(Boolean) };
+        const etiquetas = c.tipo === 'tablaFija' ? c.filasFijas : null;
+        const nf = etiquetas ? etiquetas.length : c.filas;
+        const filas = [];
+        for (let f = 1; f <= nf; f++) {
+          const celdas = c.columnas.map((_, k) => t(resp[`${c.id}_r${f}_c${k + 1}`]));
+          if (etiquetas) filas.push([etiquetas[f - 1], ...celdas]);
+          else if (celdas.some(Boolean)) filas.push(celdas);
         }
-        if (campos.length) bloques.push({ subtitulo: a.titulo, campos });
-      } else {
-        const campos = a.campos
-          .filter((c) => requerido(c) || valor(c))
-          .map((c) => ({ etiqueta: c.etiqueta, respuesta: valor(c) }));
-        if (campos.length) bloques.push({ campos });
-      }
-    }
-    secciones.push({ titulo: `C. Preparación para la audiencia — ${est.titulo}`, bloques, nota: RESPALDO_ADVERTENCIA });
-  } else {
-    secciones.push({ titulo: 'C. Preparación para la audiencia', bloques: [], vacio: 'Pendiente de asignación de personaje.' });
+        return { titulo: c.titulo, tipo: 'tabla', columnas: etiquetas ? ['', ...c.columnas] : c.columnas, filas, vacia: !filas.some((r) => r.slice(etiquetas ? 1 : 0).some(Boolean)) };
+      }),
+    });
   }
-
-  const entregada = Boolean(expediente?.entregadoEn);
-  const datos = [
-    ['Establecimiento', DATOS_INSTITUCIONALES.establecimiento],
-    ['Estudiante', perfil?.nombreMostrar || `${perfil?.nombre || ''} ${perfil?.apellido || ''}`.trim()],
-    ['Curso', perfil?.curso || ''],
-    ['Caso', perfil?.caso ? `Caso ${perfil.caso}` : 'Pendiente de asignación'],
-    ['Personaje', p ? p.nombre : 'Pendiente de asignación'],
-    ['Estado', entregada ? `Entregada el ${fechaHora(expediente.entregadoEn)}${expediente.version > 1 ? ` (versión ${expediente.version})` : ''}` : 'En desarrollo (borrador)'],
-    ['Documento generado', fechaHora(new Date())],
-  ];
-  if (entregada && expediente.editadoDespuesDeEntrega) datos.push(['Aviso', 'Existen ediciones posteriores a la fecha de entrega.']);
-  return { datos, secciones, entregada, p };
+  return out;
 }
 
-/* ---------- Construcción del documento ---------- */
-
-export function construirDocumento(docx, opciones) {
-  const {
-    Document, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, ShadingType, BorderStyle,
-    AlignmentType, Header, Footer, PageNumber, HeadingLevel,
-  } = docx;
-  const { datos, secciones, entregada } = armarContenido(opciones);
-
-  const run = (text, o = {}) => new TextRun({ text, font: FUENTE, size: 22, color: TINTA, ...o });
-  const parrafosDeTexto = (texto, o = {}) =>
-    String(texto).split(/\r?\n/).map((linea) => new Paragraph({ spacing: { after: 80, line: 276 }, children: [run(linea, o)] }));
-
-  const bordeFino = { style: BorderStyle.SINGLE, size: 4, color: 'B9A57F' };
-  const bordes = { top: bordeFino, bottom: bordeFino, left: bordeFino, right: bordeFino };
-
-  const tablaDatos = new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    rows: datos.map(([k, v]) => new TableRow({
-      children: [
-        new TableCell({ width: { size: 28, type: WidthType.PERCENTAGE }, borders: bordes, shading: { type: ShadingType.CLEAR, fill: PAPEL, color: 'auto' },
-          margins: { top: 60, bottom: 60, left: 120, right: 120 },
-          children: [new Paragraph({ children: [run(k.toUpperCase(), { bold: true, size: 18, color: BURDEOS, font: 'Courier New' })] })] }),
-        new TableCell({ width: { size: 72, type: WidthType.PERCENTAGE }, borders: bordes, margins: { top: 60, bottom: 60, left: 120, right: 120 },
-          children: [new Paragraph({ children: [run(v)] })] }),
-      ],
-    })),
+function construir(docx, perfil, resp, meta = {}) {
+  const { Document, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType, AlignmentType } = docx;
+  const p = (texto, o = {}) => new Paragraph({ spacing: { after: o.after ?? 80 }, ...o.par, children: [new TextRun({ text: texto, font: 'Calibri', size: o.size || 22, color: o.color || TINTA, bold: o.bold, italics: o.italics })] });
+  const vacio = () => p('(sin responder)', { italics: true, color: GRIS });
+  const borde = { style: BorderStyle.SINGLE, size: 4, color: 'C9B99A' };
+  const bordes = { top: borde, bottom: borde, left: borde, right: borde };
+  const celda = (texto, o = {}) => new TableCell({
+    borders: bordes, shading: o.fondo ? { type: ShadingType.CLEAR, color: 'auto', fill: o.fondo } : undefined,
+    margins: { top: 60, bottom: 60, left: 90, right: 90 },
+    children: String(texto || '').split('\n').map((linea) => p(linea, { after: 20, bold: o.bold, size: 20, color: o.color })),
   });
-
-  // Pregunta y respuesta en una tabla de dos filas: se distinguen a simple vista.
-  const preguntaRespuesta = ({ etiqueta, respuesta, opcional }) => new Table({
+  const tabla = (columnas, filas) => new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     rows: [
-      new TableRow({ cantSplit: true, children: [new TableCell({
-        borders: bordes, shading: { type: ShadingType.CLEAR, fill: PAPEL, color: 'auto' }, margins: { top: 60, bottom: 60, left: 140, right: 140 },
-        children: [new Paragraph({ keepNext: true, children: [run(etiqueta, { bold: true }), opcional ? run('  (opcional)', { size: 18, color: GRIS }) : run('')] })],
-      })] }),
-      new TableRow({ children: [new TableCell({
-        borders: bordes, margins: { top: 80, bottom: 80, left: 140, right: 140 },
-        children: respuesta ? parrafosDeTexto(respuesta) : [new Paragraph({ children: [run('(sin responder)', { italics: true, color: GRIS })] })],
-      })] }),
+      ...(columnas.some(Boolean) ? [new TableRow({ tableHeader: true, children: columnas.map((c) => celda(c, { bold: true, fondo: CREMA })) })] : []),
+      ...filas.map((r) => new TableRow({ children: r.map((c, i) => celda(c, { bold: !columnas[0] && i === 0 })) })),
     ],
   });
-  const separador = () => new Paragraph({ spacing: { after: 120 }, children: [] });
 
-  const hijos = [];
-  hijos.push(new Paragraph({
-    alignment: AlignmentType.CENTER, spacing: { before: 120, after: 160 },
-    children: [new TextRun({ text: 'PREPARACIÓN INDIVIDUAL — JUICIO SIMULADO', font: FUENTE_TITULO, bold: true, size: 34, color: TINTA })],
-  }));
-  if (!entregada) {
-    hijos.push(new Paragraph({
-      alignment: AlignmentType.CENTER, spacing: { after: 200 },
-      border: { top: { style: BorderStyle.SINGLE, size: 12, color: BURDEOS }, bottom: { style: BorderStyle.SINGLE, size: 12, color: BURDEOS } },
-      children: [new TextRun({ text: 'BORRADOR — aún no entregado', font: 'Courier New', bold: true, size: 24, color: BURDEOS })],
-    }));
+  const caso = perfil?.caso ? `Caso ${perfil.caso} · ${NOMBRE_CASOS[perfil.caso]}` : 'Sin asignar';
+  const hijos = [
+    p('MI EXPEDIENTE JUDICIAL', { bold: true, size: 30, color: TINTA, after: 40 }),
+    p('Preparación individual para el juicio simulado', { color: BURDEOS, size: 22, after: 200 }),
+    tabla(['', ''], [
+      ['Estudiante', `${perfil?.nombre || ''} ${perfil?.apellido || ''}`.trim()],
+      ['Caso', caso],
+      ['Personaje', PERSONAJES[perfil?.personaje]?.nombre || 'Sin asignar'],
+      ['Estado', meta.entregadoEn ? `Entregada el ${fechaHora(meta.entregadoEn)}` : 'Borrador (no entregada)'],
+    ]),
+  ];
+  for (const s of estructuraDocumento(perfil, resp)) {
+    hijos.push(p(s.titulo.toUpperCase(), { bold: true, size: 26, color: BURDEOS, after: 120, par: { spacing: { before: 360, after: 120 } } }));
+    s.campos.forEach((c, i) => {
+      hijos.push(p(`${i + 1}. ${c.titulo}`, { bold: true, size: 22, par: { spacing: { before: 180, after: 60 }, keepNext: true } }));
+      if (c.tipo === 'texto') { if (c.valor) c.valor.split('\n').forEach((l) => hijos.push(p(l))); else hijos.push(vacio()); }
+      else if (c.tipo === 'lista') { if (c.items.length) c.items.forEach((it) => hijos.push(p(`•  ${it}`))); else hijos.push(vacio()); }
+      else if (c.vacia) hijos.push(vacio());
+      else hijos.push(tabla(c.columnas, c.filas));
+    });
   }
-  hijos.push(tablaDatos, separador());
-
-  for (const s of secciones) {
-    hijos.push(new Paragraph({
-      heading: HeadingLevel.HEADING_1, spacing: { before: 320, after: 140 }, keepNext: true,
-      border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: BURDEOS, space: 2 } },
-      children: [new TextRun({ text: s.titulo, font: FUENTE_TITULO, bold: true, size: 28, color: BURDEOS })],
-    }));
-    if (s.vacio) hijos.push(new Paragraph({ children: [run(s.vacio, { italics: true, color: GRIS })] }));
-    for (const b of s.bloques) {
-      if (b.subtitulo) {
-        hijos.push(new Paragraph({
-          heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 100 }, keepNext: true,
-          children: [new TextRun({ text: b.subtitulo, font: FUENTE_TITULO, bold: true, size: 24, color: TINTA })],
-        }));
-      }
-      for (const c of b.campos) hijos.push(preguntaRespuesta(c), separador());
-    }
-    if (s.nota) hijos.push(new Paragraph({ spacing: { before: 60 }, children: [run(s.nota, { italics: true, size: 19, color: GRIS })] }));
-  }
-
-  const encabezado = new Header({
-    children: [
-      ...['LICEO LUIS URBINA FLORES', 'DEPARTAMENTO DE HISTORIA', `PROFESOR ${DATOS_INSTITUCIONALES.profesor.toUpperCase()}`].map((linea, i) =>
-        new Paragraph({ alignment: AlignmentType.LEFT, spacing: { after: 0 }, children: [new TextRun({ text: linea, font: 'Courier New', bold: i === 0, size: 18, color: i === 0 ? BURDEOS : GRIS })] })),
-      new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: 'B9A57F', space: 4 } }, children: [] }),
-    ],
-  });
-  const pie = new Footer({
-    children: [new Paragraph({
-      alignment: AlignmentType.CENTER,
-      children: [new TextRun({ children: ['Página ', PageNumber.CURRENT, ' de ', PageNumber.TOTAL_PAGES], font: FUENTE, size: 18, color: GRIS })],
-    })],
-  });
-
+  hijos.push(p(`Descargado el ${fechaHora(new Date())}`, { italics: true, color: GRIS, size: 18, par: { spacing: { before: 360 }, alignment: AlignmentType.RIGHT } }));
   return new Document({
-    creator: DATOS_INSTITUCIONALES.profesor,
-    title: 'Preparación individual — Juicio simulado',
-    description: 'Documento generado desde Mi expediente judicial',
-    styles: { default: { document: { run: { font: FUENTE, size: 22 } } } },
-    sections: [{
-      properties: { page: { margin: { top: 1500, bottom: 1200, left: 1300, right: 1300 } } },
-      headers: { default: encabezado },
-      footers: { default: pie },
-      children: hijos,
-    }],
+    creator: 'Mi expediente judicial', title: nombreArchivo(perfil).replace('.docx', ''),
+    sections: [{ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1100, right: 1100 } } }, children: hijos }],
   });
 }
 
-/* ---------- API pública ---------- */
-
-/** Genera el .docx y devuelve { blob, nombre }. `docxLib` solo se usa en pruebas de Node. */
-export async function generarWord(opciones, docxLib) {
-  const docx = docxLib || await cargarDocx();
-  const doc = construirDocumento(docx, opciones);
-  const blob = await docx.Packer.toBlob(doc);
-  return { blob, nombre: nombreArchivo(opciones.perfil) };
+export async function generarBlob(perfil, resp, meta) {
+  const docx = await cargarDocx();
+  return docx.Packer.toBlob(construir(docx, perfil, resp, meta));
 }
 
-/** Genera y descarga el Word del estudiante. Devuelve el nombre del archivo. */
-export async function descargarWord(opciones) {
-  const { blob, nombre } = await generarWord(opciones);
-  descargarBlob(blob, nombre);
-  return nombre;
+export async function descargarWord({ perfil, respuestas, expediente }) {
+  const blob = await generarBlob(perfil, respuestas || expediente?.respuestas || {}, { entregadoEn: expediente?.entregadoEn });
+  descargarBlob(blob, nombreArchivo(perfil));
 }

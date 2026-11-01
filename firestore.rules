@@ -11,9 +11,9 @@ rules_version = '2';
  *                 NO se confía en el correo.
  *   · Estudiante → cualquier otra cuenta autenticada; solo puede tocar SU expediente (documento con su uid).
  *
- * Limitación conocida (decisión de diseño): la contraseña de cada estudiante se deriva de su nombre y apellido,
- * así que quien conozca esos datos de un compañero puede ingresar como él. Estas reglas protegen a los estudiantes
- * de personas sin cuenta y al profesor/evaluaciones de los estudiantes, pero NO entre compañeros que se suplanten.
+ * Ingreso v3: nombre + apellido + código de 4 dígitos (entregado por el profesor). El código queda en el perfil
+ * (campo `codigo`), que solo leen el propio estudiante y el profesor. Un código de 4 dígitos es una protección
+ * escolar, no bancaria: evita que un compañero entre con solo saber el nombre de otro.
  */
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -62,7 +62,7 @@ service cloud.firestore {
       // Solo el profesor crea perfiles (la cuenta de Authentication la crea la página del profesor con una segunda instancia).
       allow create: if esProfesor()
         && request.resource.data.keys().hasOnly(['uid', 'nombre', 'apellido', 'nombreMostrar', 'curso', 'caso', 'personaje',
-                                                 'asignacionBloqueada', 'activo', 'cerrado', 'codigoCuenta', 'creadoEn'])
+                                                 'asignacionBloqueada', 'activo', 'cerrado', 'codigoCuenta', 'codigo', 'creadoEn'])
         && request.resource.data.uid == uid
         && request.resource.data.activo == true
         && request.resource.data.cerrado == false;
@@ -70,7 +70,7 @@ service cloud.firestore {
       // El profesor puede asignar caso/personaje, bloquear asignaciones, suspender y cerrar la edición de un estudiante.
       allow update: if esProfesor()
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['caso', 'personaje', 'asignacionBloqueada', 'curso', 'cerrado', 'activo', 'actualizadoEn'])
+             .hasOnly(['caso', 'personaje', 'asignacionBloqueada', 'curso', 'cerrado', 'activo', 'codigo', 'actualizadoEn'])
         && (
           // no se cambia caso/personaje si la asignación está bloqueada (global o individual)
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['caso', 'personaje'])

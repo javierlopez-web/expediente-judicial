@@ -2,7 +2,7 @@
 
 import { h, vaciar, idUnico } from './util.js';
 import { alCambiar, alternar, sonidoActivo, sonidoPermitido } from './audio.js';
-import { ETIQUETA_ESTADO } from './progreso.js';
+const ETIQUETA_ESTADO = { sin_iniciar: 'Sin iniciar', en_desarrollo: 'En desarrollo', entregada: 'Entregada' };
 
 /** Estado de la sesión del estudiante, compartido entre pantallas. */
 export const S = {

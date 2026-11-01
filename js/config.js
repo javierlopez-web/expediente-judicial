@@ -41,6 +41,7 @@ export const AJUSTES_PREDETERMINADOS = {
   curso: '3° medio',
   fechaLimite: '',
   edicionHabilitada: true,
+  bloqueCHabilitado: false,   // reflexión y observación (después de la audiencia)
   mensajeGeneral: '',
   reglasEntrega:
     'Puedes seguir corrigiendo tu preparación después de entregarla, mientras el profesor no active el cierre. ' +
