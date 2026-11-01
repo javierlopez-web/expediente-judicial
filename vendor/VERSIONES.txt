@@ -1,4 +1,4 @@
 firebase 13.1.0
 docx 9.14.0
 jszip 3.10.2
-Generado con tools/construir-vendor.mjs
+Generado con tools/construir-vendor.mjs (firebase) · docx y jszip sin cambios

@@ -1,21 +1,22 @@
 /**
- * SERVICIO FIREBASE (Authentication + Cloud Firestore) · funciona con el plan GRATUITO (Spark), sin Cloud Functions.
+ * SERVICIO FIREBASE (Authentication + Cloud Firestore) · plan GRATUITO (Spark), sin Cloud Functions.
  * ---------------------------------------------------------------
  * Implementa el mismo contrato que js/local-backend.js.
- *  · Los estudiantes ingresan con nombre + primer apellido: la contraseña de su cuenta se deriva de esos mismos datos
- *    (ver claveDeIngreso en util.js). No hay claves que repartir ni restablecer.
- *  · El profesor crea las cuentas desde el panel, usando una segunda instancia de Firebase para no perder su propia sesión.
- *  · «Profesor» = existe el documento profesores/<uid> (se crea a mano en la consola de Firebase; ninguna página puede crearlo).
- *
- * Los permisos reales los imponen firestore.rules; ocultar botones no basta.
- *
- * ESTADO: escrito siguiendo la documentación del SDK modular, pero NO probado contra un proyecto
- * Firebase real (no hay acceso a uno desde donde se construyó). Ver PENDIENTES.md.
+ *  · Ingreso del estudiante (v3): NOMBRE + APELLIDO + CÓDIGO de 4 dígitos que entrega el profesor.
+ *    Internamente: identificador técnico <huella(nombre, apellido, variante)>@dominio y contraseña
+ *    claveConCodigo(nombre, apellido, código). `variante` ('' o '2', '3') solo distingue homónimos.
+ *  · El profesor crea, cambia el código y elimina cuentas desde el panel usando una SEGUNDA instancia de
+ *    Firebase (inicia sesión como el estudiante, con datos que el profesor conoce, y cambia la contraseña).
+ *  · Cuentas antiguas (sin código): su contraseña era claveDeIngreso(nombre, apellido, codigoCuenta).
+ *    «Asignar código» las convierte al nuevo sistema sin perder lo escrito.
+ *  · «Profesor» = existe el documento profesores/<uid> (se crea a mano en la consola).
+ * Los permisos reales los imponen firestore.rules.
  */
 
 import { FIREBASE_CONFIG, DOMINIO_AUTENTICACION, AJUSTES_PREDETERMINADOS } from './config.js';
-import { huellaIdentidad, claveDeIngreso, capitalizar, clon } from './util.js';
+import { huellaIdentidad, claveDeIngreso, claveConCodigo, capitalizar, clon, soloDigitos } from './util.js';
 
+const VARIANTES = ['', '2', '3'];
 const errorApp = (code, message) => Object.assign(new Error(message || code), { code });
 
 export function crearBackendFirebase() {
@@ -24,7 +25,20 @@ export function crearBackendFirebase() {
   const esProf = async (uid) => {
     try { return (await fb.getDoc(fb.doc(db, 'profesores', uid))).exists(); } catch { return false; }
   };
-  const correoDe = async (nombre, apellido, codigo) => `${await huellaIdentidad(nombre, apellido, codigo)}@${DOMINIO_AUTENTICACION}`;
+  const correoDe = async (nombre, apellido, variante = '') => `${await huellaIdentidad(nombre, apellido, variante)}@${DOMINIO_AUTENTICACION}`;
+  /** Contraseña vigente de una cuenta según su perfil (con código = v3; sin código = cuenta antigua). */
+  const claveActual = (p) => (p.codigo ? claveConCodigo(p.nombre, p.apellido, p.codigo) : claveDeIngreso(p.nombre, p.apellido, p.codigoCuenta || ''));
+  /** Inicia sesión como el estudiante en la instancia secundaria (prueba la clave vigente y, por si quedó a medias, la alternativa). */
+  const entrarComo = async (p, alternativa) => {
+    const sec = await authSecundaria();
+    const correo = await correoDe(p.nombre, p.apellido, p.codigoCuenta || '');
+    const claves = [claveActual(p), alternativa].filter(Boolean);
+    let ultimo;
+    for (const c of claves) {
+      try { await fb.signInWithEmailAndPassword(sec, correo, c); return sec; } catch (e) { ultimo = e; }
+    }
+    throw ultimo;
+  };
 
   /** Segunda instancia de Firebase, solo para crear cuentas sin cerrar la sesión del profesor. */
   const authSecundaria = async () => {
@@ -58,9 +72,15 @@ export function crearBackendFirebase() {
     },
 
     async iniciarSesionEstudiante({ nombre, apellido, codigo }) {
+      const cod = soloDigitos(codigo);
+      if (cod.length !== 4) throw errorApp('app/codigo');
       await fb.setPersistence(auth, fb.browserSessionPersistence); // se cierra al cerrar la pestaña (equipos compartidos)
-      const cred = await fb.signInWithEmailAndPassword(auth, await correoDe(nombre, apellido, codigo), claveDeIngreso(nombre, apellido, codigo));
-      // La cuenta debe tener su perfil de estudiante y no estar suspendida.
+      let cred = null, ultimo = null;
+      for (const v of VARIANTES) {
+        try { cred = await fb.signInWithEmailAndPassword(auth, await correoDe(nombre, apellido, v), claveConCodigo(nombre, apellido, cod)); break; }
+        catch (e) { ultimo = e; if (!/invalid-credential|wrong-password|user-not-found|invalid-email|invalid-login/.test(e.code || '')) throw e; }
+      }
+      if (!cred) throw ultimo;
       const perfil = await fb.getDoc(fb.doc(db, 'estudiantes', cred.user.uid)).then((d) => (d.exists() ? d.data() : null)).catch(() => null);
       if (!perfil) { await fb.signOut(auth); throw errorApp('app/sin-perfil'); }
       if (perfil.activo === false) { await fb.signOut(auth); throw errorApp('auth/user-disabled'); }
@@ -205,7 +225,7 @@ export function crearBackendFirebase() {
     },
 
     async actualizarEstudiante(uid, datos) {
-      const permitido = ['caso', 'personaje', 'asignacionBloqueada', 'curso', 'cerrado'];
+      const permitido = ['caso', 'personaje', 'asignacionBloqueada', 'curso', 'cerrado', 'activo'];
       const upd = { actualizadoEn: fb.serverTimestamp() };
       for (const k of permitido) if (k in datos) upd[k] = datos[k];
       await fb.updateDoc(fb.doc(db, 'estudiantes', uid), upd);
@@ -213,8 +233,9 @@ export function crearBackendFirebase() {
     },
 
     /**
-     * Crea la cuenta (Authentication, con la segunda instancia) y el perfil (Firestore, con la sesión del profesor).
-     * Si la cuenta ya existía pero sin perfil (p. ej. falló a medias), se recupera en lugar de dar error.
+     * Crea cuentas: { nombre, apellido, codigo (4 dígitos), caso, personaje, curso }.
+     * Si ya existe una cuenta con ese nombre y apellido, se usa la variante siguiente (homónimos).
+     * Si la cuenta existía sin perfil (algo falló a medias) y la clave coincide, se recupera.
      */
     async crearEstudiantes(lista) {
       const sec = await authSecundaria();
@@ -222,50 +243,78 @@ export function crearBackendFirebase() {
       for (const it of lista) {
         const nombre = capitalizar(String(it.nombre ?? '').trim().slice(0, 80));
         const apellido = capitalizar(String(it.apellido ?? '').trim().slice(0, 80));
-        const codigoCuenta = String(it.codigoCuenta ?? '').trim().slice(0, 20);
+        const codigo = soloDigitos(it.codigo);
         const curso = String(it.curso ?? '').trim().slice(0, 40);
-        const base = { nombre, apellido, curso };
+        const base = { nombre, apellido, codigo };
         if (!nombre || !apellido) { resultados.push({ ...base, estado: 'error', mensaje: 'Falta el nombre o el apellido.' }); continue; }
-        const correo = await correoDe(nombre, apellido, codigoCuenta);
-        const clave = claveDeIngreso(nombre, apellido, codigoCuenta);
-        let uid = null, estado = 'creado';
-        try {
+        if (codigo.length !== 4) { resultados.push({ ...base, estado: 'error', mensaje: 'El código debe tener 4 dígitos.' }); continue; }
+        const clave = claveConCodigo(nombre, apellido, codigo);
+        let uid = null, variante = '', estado = 'creado', mensaje = '';
+        for (const v of VARIANTES) {
+          const correo = await correoDe(nombre, apellido, v);
           try {
-            uid = (await fb.createUserWithEmailAndPassword(sec, correo, clave)).user.uid;
+            uid = (await fb.createUserWithEmailAndPassword(sec, correo, clave)).user.uid; variante = v; break;
           } catch (e) {
-            if (!/email-already-in-use/.test(e.code || '')) throw e;
-            uid = (await fb.signInWithEmailAndPassword(sec, correo, clave)).user.uid;
-            const ya = await fb.getDoc(fb.doc(db, 'estudiantes', uid));
-            if (ya.exists()) {
-              resultados.push({ uid, ...base, estado: 'duplicado', mensaje: 'Ya existe una cuenta con ese nombre y apellido. Usa un código de cuenta para diferenciarlos.' });
-              uid = null;
-            } else estado = 'recuperada';
+            if (!/email-already-in-use/.test(e.code || '')) {
+              console.error('crearEstudiantes', e.code, e.message);
+              mensaje = /operation-not-allowed/.test(e.code || '') ? 'En Firebase falta activar el ingreso con correo y contraseña.'
+                : /too-many-requests/.test(e.code || '') ? 'Firebase pidió esperar unos minutos. Vuelve a intentarlo luego.' : 'No se pudo crear la cuenta.';
+              break;
+            }
+            // ¿Es una cuenta huérfana (sin perfil) con esta misma clave? Entonces se recupera.
+            try {
+              const u = (await fb.signInWithEmailAndPassword(sec, correo, clave)).user.uid;
+              const ya = await fb.getDoc(fb.doc(db, 'estudiantes', u));
+              if (!ya.exists()) { uid = u; variante = v; estado = 'recuperada'; break; }
+              mensaje = 'Ya existe un estudiante con ese nombre, apellido y código. Usa otro código.';
+              break;
+            } catch { /* clave distinta: es otra persona (homónimo) → probar la variante siguiente */ }
+          } finally {
+            try { await fb.signOut(sec); } catch { /* sin sesión */ }
           }
-        } catch (e) {
-          console.error('crearEstudiantes', e.code, e.message);
-          const msg = /operation-not-allowed/.test(e.code || '') ? 'En Firebase falta activar el ingreso con correo y contraseña.'
-            : /too-many-requests/.test(e.code || '') ? 'Firebase pidió esperar unos minutos antes de crear más cuentas. Vuelve a intentarlo luego.'
-            : /weak-password/.test(e.code || '') ? 'El nombre y el apellido son demasiado cortos para crear la cuenta.' : 'No se pudo crear la cuenta.';
-          resultados.push({ ...base, estado: 'error', mensaje: msg });
-          uid = null;
-        } finally {
-          try { await fb.signOut(sec); } catch { /* sin sesión que cerrar */ }
         }
-        if (!uid) continue;
+        if (!uid) { resultados.push({ ...base, estado: 'error', mensaje: mensaje || 'Ya existen tres cuentas con ese nombre y apellido.' }); continue; }
         try {
           await fb.setDoc(fb.doc(db, 'estudiantes', uid), {
             uid, nombre, apellido, nombreMostrar: `${nombre} ${apellido}`, curso,
             caso: [1, 2, 3].includes(Number(it.caso)) ? Number(it.caso) : null,
             personaje: it.personaje || null,
-            asignacionBloqueada: false, activo: true, cerrado: false, codigoCuenta, creadoEn: fb.serverTimestamp(),
+            asignacionBloqueada: false, activo: true, cerrado: false, codigoCuenta: variante, codigo, creadoEn: fb.serverTimestamp(),
           });
-          resultados.push({ uid, ...base, estado });
+          resultados.push({ uid, ...base, estado, homonimo: Boolean(variante) });
         } catch (e) {
           console.error('perfil', e.code, e.message);
-          resultados.push({ ...base, estado: 'error', mensaje: 'La cuenta se creó, pero no se pudo guardar su perfil. Vuelve a intentar con el mismo nombre: se recuperará.' });
+          resultados.push({ ...base, estado: 'error', mensaje: 'La cuenta se creó, pero no se pudo guardar su perfil (¿publicaste las reglas nuevas?). Vuelve a intentarlo: se recuperará.' });
         }
       }
       return resultados;
+    },
+
+    /**
+     * Cambia (o asigna por primera vez) el código de 4 dígitos de un estudiante.
+     * Entra como el estudiante en la instancia secundaria y cambia su contraseña técnica.
+     */
+    async cambiarCodigo(uid, nuevo) {
+      const codigo = soloDigitos(nuevo);
+      if (codigo.length !== 4) throw errorApp('app/codigo', 'El código debe tener 4 dígitos.');
+      const p = await this.cargarPerfil(uid);
+      if (!p) throw errorApp('not-found', 'No existe ese estudiante.');
+      const nueva = claveConCodigo(p.nombre, p.apellido, codigo);
+      const sec = await entrarComo(p, nueva);
+      try { await fb.updatePassword(sec.currentUser, nueva); } finally { try { await fb.signOut(sec); } catch { /* */ } }
+      await fb.updateDoc(fb.doc(db, 'estudiantes', uid), { codigo, actualizadoEn: fb.serverTimestamp() });
+      return this.cargarPerfil(uid);
+    },
+
+    /** Elimina la cuenta (Authentication) y el perfil. Lo escrito queda guardado en Firestore, sin dueño. */
+    async eliminarEstudiante(uid) {
+      const p = await this.cargarPerfil(uid);
+      if (!p) return;
+      try {
+        const sec = await entrarComo(p);
+        try { await fb.deleteUser(sec.currentUser); } finally { try { await fb.signOut(sec); } catch { /* */ } }
+      } catch (e) { console.warn('No se pudo borrar la cuenta de acceso; se borra el perfil igual.', e.code); }
+      await fb.deleteDoc(fb.doc(db, 'estudiantes', uid));
     },
 
     async suspenderEstudiante(uid, suspendido) {

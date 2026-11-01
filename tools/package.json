@@ -1,0 +1,13 @@
+{
+  "name": "expediente-judicial-herramientas",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "vendor": "node construir-vendor.mjs",
+    "bundle": "node construir-bundle.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "firebase": "13.1.0"
+  }
+}

@@ -9,7 +9,7 @@
 
 import { AJUSTES_PREDETERMINADOS, DATOS_INSTITUCIONALES } from './config.js';
 import { LISTA_PERSONAJES } from './contenido.js';
-import { huellaIdentidad, capitalizar, clon, uuidCorto } from './util.js';
+import { huellaIdentidad, capitalizar, clon, uuidCorto, soloDigitos } from './util.js';
 
 const CLAVE_DB = 'expjud:local:db';
 const CLAVE_SESION = 'expjud:local:sesion';
@@ -77,9 +77,15 @@ export function crearBackendLocal() {
 
     async iniciarSesionEstudiante({ nombre, apellido, codigo }) {
       await pausa();
-      const huella = await huellaIdentidad(nombre, apellido, codigo);
+      const cod = soloDigitos(codigo);
+      if (cod.length !== 4) throw error('app/codigo');
       const db = leer();
-      const est = Object.values(db.estudiantes).find((e) => e.huella === huella);
+      let est = null;
+      for (const v of ['', '2', '3']) {
+        const huella = await huellaIdentidad(nombre, apellido, v);
+        est = Object.values(db.estudiantes).find((e) => e.huella === huella && e.codigo === cod);
+        if (est) break;
+      }
       if (!est) throw error('auth/invalid-credential');
       if (est.activo === false) throw error('auth/user-disabled');
       sessionStorage.setItem(CLAVE_SESION, JSON.stringify({ uid: est.uid, esProfesor: false }));
@@ -180,7 +186,7 @@ export function crearBackendLocal() {
       exigirProfesor(); await pausa(100);
       const db = leer();
       if (!db.estudiantes[uid]) throw error('not-found');
-      const permitido = ['caso', 'personaje', 'asignacionBloqueada', 'curso', 'cerrado'];
+      const permitido = ['caso', 'personaje', 'asignacionBloqueada', 'curso', 'cerrado', 'activo'];
       for (const k of permitido) if (k in datos) db.estudiantes[uid][k] = datos[k];
       escribir(db);
       return clon(db.estudiantes[uid]);
@@ -193,22 +199,47 @@ export function crearBackendLocal() {
       for (const it of lista) {
         const nombre = capitalizar(it.nombre);
         const apellido = capitalizar(it.apellido);
+        const codigo = soloDigitos(it.codigo);
         if (!nombre || !apellido) { resultados.push({ ...it, estado: 'error', mensaje: 'Falta el nombre o el apellido.' }); continue; }
-        const huella = await huellaIdentidad(nombre, apellido, it.codigoCuenta || '');
-        if (Object.values(db.estudiantes).some((e) => e.huella === huella)) {
-          resultados.push({ ...it, nombre, apellido, estado: 'duplicado', mensaje: 'Ya existe una cuenta con ese nombre y apellido. Usa un código de cuenta para diferenciarlos.' });
-          continue;
+        if (codigo.length !== 4) { resultados.push({ ...it, estado: 'error', mensaje: 'El código debe tener 4 dígitos.' }); continue; }
+        let variante = null, huella = '';
+        const iguales = await Promise.all(['', '2', '3'].map((v) => huellaIdentidad(nombre, apellido, v)));
+        if (Object.values(db.estudiantes).some((e) => iguales.includes(e.huella) && e.codigo === codigo)) {
+          resultados.push({ ...it, estado: 'error', mensaje: 'Ya existe un estudiante con ese nombre, apellido y código. Usa otro código.' }); continue;
         }
+        for (const v of ['', '2', '3']) {
+          huella = await huellaIdentidad(nombre, apellido, v);
+          if (!Object.values(db.estudiantes).some((e) => e.huella === huella)) { variante = v; break; }
+        }
+        if (variante === null) { resultados.push({ ...it, estado: 'error', mensaje: 'Ya existen tres cuentas con ese nombre y apellido.' }); continue; }
         const uid = 'local-' + uuidCorto();
         db.estudiantes[uid] = {
-          uid, huella, nombre, apellido, nombreMostrar: `${nombre} ${apellido}`, curso: it.curso || db.config.curso,
-          caso: it.caso || null, personaje: it.personaje || null, asignacionBloqueada: false, activo: true, cerrado: false,
-          codigoCuenta: it.codigoCuenta || '', creadoEn: ahora(),
+          uid, huella, nombre, apellido, nombreMostrar: `${nombre} ${apellido}`, curso: it.curso || '',
+          caso: it.caso ? Number(it.caso) : null, personaje: it.personaje || null, asignacionBloqueada: false, activo: true, cerrado: false,
+          codigoCuenta: variante, codigo, creadoEn: ahora(),
         };
-        resultados.push({ uid, nombre, apellido, curso: db.estudiantes[uid].curso, estado: 'creado', soloPrueba: true });
+        resultados.push({ uid, nombre, apellido, codigo, estado: 'creado', homonimo: Boolean(variante) });
       }
       escribir(db);
       return resultados;
+    },
+
+    async cambiarCodigo(uid, nuevo) {
+      exigirProfesor(); await pausa(200);
+      const codigo = soloDigitos(nuevo);
+      if (codigo.length !== 4) throw error('app/codigo', 'El código debe tener 4 dígitos.');
+      const db = leer();
+      if (!db.estudiantes[uid]) throw error('not-found');
+      db.estudiantes[uid].codigo = codigo;
+      escribir(db);
+      return clon(db.estudiantes[uid]);
+    },
+
+    async eliminarEstudiante(uid) {
+      exigirProfesor(); await pausa(200);
+      const db = leer();
+      delete db.estudiantes[uid];
+      escribir(db);
     },
 
     async suspenderEstudiante(uid, suspendido) {
@@ -242,29 +273,23 @@ export function crearBackendLocal() {
 
     async cargarDatosDePrueba() {
       const db = leer();
-      for (const p of LISTA_PERSONAJES) {
-        const nombre = 'Prueba';
-        const apellido = { fiscal: 'Fiscal', defensor: 'Defensor', acusado: 'Acusado', victima: 'Victima', testigo1: 'Testigouno', testigo2: 'Testigodos', perito: 'Perito', juez_presidente: 'Presidente', juez_preguntas: 'Preguntas', juez_decision: 'Decision' }[p.clave];
+      const apellidos = { fiscal: 'Fiscal', defensor: 'Defensor', acusado: 'Acusado', victima: 'Victima', testigo1: 'Testigouno', testigo2: 'Testigodos', perito: 'Perito', juez_presidente: 'Presidente', juez_preguntas: 'Preguntas', juez_decision: 'Decision' };
+      for (const [i, p] of LISTA_PERSONAJES.entries()) {
+        const nombre = 'Prueba', apellido = apellidos[p.clave];
         const huella = await huellaIdentidad(nombre, apellido, '');
         if (Object.values(db.estudiantes).some((e) => e.huella === huella)) continue;
         const uid = 'local-' + uuidCorto();
         db.estudiantes[uid] = {
-          uid, huella, nombre, apellido, nombreMostrar: `${nombre} ${apellido}`, curso: db.config.curso, caso: 1, personaje: p.clave,
-          asignacionBloqueada: false, activo: true, cerrado: false, codigoCuenta: '', creadoEn: ahora(),
+          uid, huella, nombre, apellido, nombreMostrar: `${nombre} ${apellido}`, curso: '', caso: 1, personaje: p.clave,
+          asignacionBloqueada: false, activo: true, cerrado: false, codigoCuenta: '', codigo: String(1001 + i), creadoEn: ahora(),
         };
-      }
-      // Un estudiante más, sin asignación, para probar ese estado.
-      const huella = await huellaIdentidad('Prueba', 'Sinrol', '');
-      if (!Object.values(db.estudiantes).some((e) => e.huella === huella)) {
-        const uid = 'local-' + uuidCorto();
-        db.estudiantes[uid] = { uid, huella, nombre: 'Prueba', apellido: 'Sinrol', nombreMostrar: 'Prueba Sinrol', curso: db.config.curso, caso: null, personaje: null, asignacionBloqueada: false, activo: true, cerrado: false, codigoCuenta: '', creadoEn: ahora() };
       }
       escribir(db);
     },
 
     /** Solo para la pantalla de ingreso en modo local: qué cuentas de prueba existen (sin contraseñas, que aquí no se verifican). */
     async nombresDePrueba() {
-      return Object.values(leer().estudiantes).map((e) => ({ nombre: e.nombre, apellido: e.apellido, personaje: e.personaje, caso: e.caso }));
+      return Object.values(leer().estudiantes).map((e) => ({ nombre: e.nombre, apellido: e.apellido, codigo: e.codigo, personaje: e.personaje, caso: e.caso }));
     },
 
     async borrarDatosLocales() {

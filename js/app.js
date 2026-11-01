@@ -1,5 +1,5 @@
 /**
- * ARRANQUE Y ENRUTADOR (hash): #/bienvenida · #/tablero · #/etapa/N · #/instrucciones · #/profesor/...
+ * ARRANQUE Y ENRUTADOR (hash): #/ (inicio) · #/s/<sección> · #/profesor/...
  */
 
 import { h, montar } from './util.js';
@@ -114,11 +114,7 @@ async function render() {
   }
 
   const [a, b] = partes;
-  if (a === 'etapa') await ui.rutaEstudiante(app, 'etapa', Number.parseInt(b, 10) || 1);
-  else if (a === 'tablero') await ui.rutaEstudiante(app, 'tablero');
-  else if (a === 'instrucciones') await ui.rutaEstudiante(app, 'instrucciones');
-  else if (a === 'bienvenida' || !S.yaMostroBienvenida) await ui.rutaEstudiante(app, 'bienvenida');
-  else await ui.rutaEstudiante(app, 'tablero');
+  await ui.rutaEstudiante(app, a === 's' ? b : 'inicio');
 }
 
 async function iniciar() {
