@@ -136,3 +136,13 @@ dialog textarea { width: 100%; font: .9rem var(--f-etiqueta); padding: .5rem; ma
 .ajustes .btn { justify-self: start; }
 .tabla-resp textarea { min-height: 2.6rem; }
 .pr textarea { min-height: 0; }
+
+/* v4 · trabajo escrito */
+.pr__formato { font-weight: 400; font-size: .85em; color: var(--gris, #7a6f63); font-style: italic; }
+.pr__ejemplo em { color: var(--tinta, #30271f); }
+.instrucciones-trabajo p { margin: 0 0 .4rem; }
+.instrucciones-trabajo p:last-child { margin-bottom: 0; }
+.tabla-rubrica { table-layout: fixed; width: 100%; }
+.tabla-rubrica th:nth-child(1), .tabla-rubrica td:nth-child(1) { width: 3rem; }
+.tabla-rubrica th:nth-child(2), .tabla-rubrica td:nth-child(2) { width: auto; }
+.tabla-rubrica th:nth-child(n+3), .tabla-rubrica td:nth-child(n+3) { width: 3.4rem; text-align: center; }
