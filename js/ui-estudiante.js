@@ -1,13 +1,14 @@
 /**
- * ESPACIO DEL ESTUDIANTE (v3): ingreso, índice simple y secciones.
- *   Mi personaje · A Mi preparación · B Para mi reemplazo · C Reflexión · C Observación · Pauta · Entregar
+ * ESPACIO DEL ESTUDIANTE (v4): ingreso, índice simple y secciones.
+ *   Mi personaje · Trabajo escrito · Rúbrica de evaluación · Revisar, descargar y entregar
  * Todo se guarda solo. El Word sigue el mismo orden del índice.
  */
 
 import { h, montar, esperar, fechaHora, rutaImg, soloDigitos } from './util.js';
 import {
-  PERSONAJES, NOMBRE_CASOS, TEXTOS, FUNCION, PERSONAJES_CON_IMAGEN, PAUTA, NIVELES,
+  PERSONAJES, NOMBRE_CASOS, TEXTOS, FUNCION, PERSONAJES_CON_IMAGEN,
   secciones, avance, completo, tieneAlgo, requerido, contarPalabras, idsDe,
+  INSTRUCCIONES_TRABAJO, NIVELES_RUBRICA, rubrica, puntajesNivel, nombreTrabajo, entregaVigente,
 } from './contenido.js';
 import * as sv from './servicios.js';
 import { TEXTO_ESTADO } from './guardado.js';
@@ -194,7 +195,7 @@ function iconoEstado(sec) {
 function marco(app, actual, contenido) {
   const lista = secciones(clave());
   const estado = h('button', { type: 'button', class: 'estado-guardado', 'data-estado': S.guardado?.codigo || 'guardado', onclick: () => sv.guardarAhora() }, 'Guardado');
-  const barraP = barraProgreso(S.avance?.preparacion || 0, 'Avance de la preparación');
+  const barraP = barraProgreso(S.avance?.preparacion || 0, 'Avance del trabajo escrito');
   const pctP = h('span', { class: 'cab__pct' }, `${S.avance?.preparacion || 0}%`);
   S.barra = { estado, progreso: barraP };
   pintarEstado(S.guardado || { codigo: 'guardado' });
@@ -223,7 +224,7 @@ function marco(app, actual, contenido) {
     h('div', { class: 'cab__id' },
       h('strong', null, `${p.nombre} ${p.apellido}`),
       h('span', null, `${p.caso ? `Caso ${p.caso}` : 'Sin caso'} · ${PERSONAJES[p.personaje]?.nombre || 'Sin personaje'}`)),
-    h('div', { class: 'cab__avance' }, h('span', { class: 'cab__lbl' }, 'Preparación'), barraP, pctP),
+    h('div', { class: 'cab__avance' }, h('span', { class: 'cab__lbl' }, 'Trabajo escrito'), barraP, pctP),
     h('div', { class: 'cab__acc' }, estado, h('button', { type: 'button', class: 'btn btn--chico btn--secundario', onclick: cerrarSesionUI }, 'Salir')));
 
   const i = lista.findIndex((s) => s.id === actual);
@@ -249,7 +250,9 @@ function areaTexto(id, { filas = 3, lectura, placeholder } = {}) {
 function campoUI(c, n, lectura) {
   const cabeza = h('div', { class: 'pr__cab' },
     h('span', { class: 'pr__num' }, n),
-    h('div', null, h('h3', { class: 'pr__tit' }, c.titulo), c.ayuda ? h('p', { class: 'pr__ayuda' }, c.ayuda) : null),
+    h('div', null, h('h3', { class: 'pr__tit' }, c.titulo, c.formato ? h('span', { class: 'pr__formato' }, ` · ${c.formato}`) : null),
+      c.ayuda ? h('p', { class: 'pr__ayuda' }, h('strong', null, 'Cómo hacerlo: '), c.ayuda) : null,
+      c.ejemplo ? h('p', { class: 'pr__ayuda pr__ejemplo' }, h('strong', null, 'Puedes empezar así: '), h('em', null, c.ejemplo)) : null),
     c.puntos ? h('span', { class: 'chip chip--gris' }, `${c.puntos} pts`) : null);
   const marca = h('span', { class: 'pr__estado' });
   const pintar = () => {
@@ -262,7 +265,11 @@ function campoUI(c, n, lectura) {
   if (c.tipo === 'texto') {
     const ta = areaTexto(c.id, { filas: c.filas, lectura });
     const cont = h('span', { class: 'contador' });
-    const pc = () => { const w = contarPalabras(ta.value); cont.textContent = `${w} / ${c.limite} palabras`; cont.classList.toggle('excede', w > c.limite); };
+    const pc = () => {
+      const w = contarPalabras(ta.value);
+      cont.textContent = c.limite ? `${w} / ${c.limite} palabras${w > c.limite ? ' · te pasaste del máximo' : ''}` : `${w} palabras`;
+      cont.classList.toggle('excede', Boolean(c.limite) && w > c.limite);
+    };
     ta.addEventListener('input', pc); pc();
     cuerpo = h('div', null, ta, cont);
   } else if (c.tipo === 'opciones') {
@@ -303,8 +310,8 @@ function vistaInicio() {
   const lista = secciones(p.personaje).filter((s) => s.campos.length);
   const filaBloque = (s) => {
     const a = S.avance?.porSeccion?.[s.id] || { hechos: 0, total: 0 };
-    return h('tr', null, h('td', null, h('a', { href: `#/s/${s.id}` }, s.titulo)), h('td', null, s.puntos ? `${s.puntos} pts` : 'No se evalúa'),
-      h('td', null, s.despues && !bloqueCAbierto() ? 'Después de la audiencia' : `${a.hechos} de ${a.total}`));
+    return h('tr', null, h('td', null, h('a', { href: `#/s/${s.id}` }, `${s.titulo} · ${nombreTrabajo(p.personaje)}`)), h('td', null, s.puntos ? `${s.puntos} pts` : 'No se evalúa'),
+      h('td', null, `${a.hechos} de ${a.total} preguntas`));
   };
   return h('div', { class: 'sec' },
     h('h1', null, 'Mi personaje'),
@@ -320,40 +327,50 @@ function vistaInicio() {
     per ? h('div', null,
       h('h2', { class: 'h-sec' }, 'Qué debes entregar'),
       h('table', { class: 'tabla-simple' }, h('thead', null, h('tr', null, h('th', null, 'Sección'), h('th', null, 'Puntaje'), h('th', null, 'Avance'))),
-        h('tbody', null, lista.map(filaBloque),
-          h('tr', null, h('td', null, 'Participación en la audiencia'), h('td', null, '40 pts'), h('td', null, 'La observa el profesor')))),
+        h('tbody', null, lista.map(filaBloque))),
       h('h2', { class: 'h-sec' }, 'Cómo funciona'),
       h('ul', null,
         h('li', null, 'Usa el índice para moverte. ✓ = completa, ● = en curso, ○ = sin empezar.'),
         h('li', null, 'Todo se guarda solo. Revisa el estado arriba a la derecha.'),
-        h('li', null, 'Respuestas breves: cada pregunta muestra su límite.'),
-        h('li', null, 'Al terminar la preparación, ve a «Revisar, descargar y entregar».'),
-        h('li', null, 'El bloque C se completa después de tu audiencia.')),
-      h('a', { class: 'btn', href: '#/s/a' }, 'Empezar mi preparación →')) : null);
+        h('li', null, 'Cada pregunta indica su extensión (oraciones, palabras o filas) y su puntaje.'),
+        h('li', null, 'Antes de entregar, revisa tu trabajo con la «Rúbrica de evaluación».'),
+        h('li', null, 'Al terminar, ve a «Revisar, descargar y entregar».')),
+      h('a', { class: 'btn', href: '#/s/t' }, 'Empezar mi trabajo escrito →')) : null);
 }
 
 function vistaCampos(sec) {
   const cerrado = sec.despues && !bloqueCAbierto();
   const lectura = !editable() || cerrado;
   return h('div', { class: 'sec' },
-    h('h1', null, sec.titulo),
-    h('p', { class: 'sec__intro' }, sec.intro),
+    h('h1', null, `${sec.titulo} · ${nombreTrabajo(clave())}`),
+    sec.intro ? h('p', { class: 'sec__intro' }, sec.intro) : null,
+    sec.id === 't' ? h('div', { class: 'aviso aviso--info instrucciones-trabajo' }, h('span', null, 'i'), h('div', null,
+      h('p', null, h('strong', null, INSTRUCCIONES_TRABAJO.principal)),
+      h('p', null, INSTRUCCIONES_TRABAJO.pasos),
+      h('p', null, INSTRUCCIONES_TRABAJO.noInventes),
+      h('p', null, `Puntaje total: 40 puntos (incluye 4 puntos del criterio transversal). `, h('a', { href: '#/s/rubrica' }, 'Ver rúbrica')))) : null,
     cerrado ? h('div', { class: 'aviso aviso--alerta' }, h('span', null, '!'), h('p', null, 'Esta sección se habilita después de la audiencia. El profesor la abrirá.')) : null,
     !editable() ? h('div', { class: 'aviso aviso--alerta' }, h('span', null, '!'), h('p', null, 'La edición está cerrada. Puedes leer y descargar tu Word.')) : null,
     sec.campos.map((c, i) => campoUI(c, i + 1, lectura)));
 }
 
-function vistaPauta() {
+function vistaRubrica() {
+  const filas = rubrica(clave());
+  if (!filas.length) return h('div', { class: 'sec' }, h('h1', null, 'Rúbrica de evaluación'), h('p', null, 'La rúbrica aparece cuando el profesor te asigne un personaje.'));
   return h('div', { class: 'sec' },
-    h('h1', null, 'Pauta de evaluación · 100 puntos'),
-    h('p', { class: 'sec__intro' }, 'El profesor evalúa lo que hace tu personaje, no los errores de tus compañeros. La nota no depende de acertar el resultado del juicio, sino de fundamentar con las pruebas.'),
+    h('h1', null, `Rúbrica de evaluación · ${nombreTrabajo(clave())}`),
+    h('p', { class: 'sec__intro' }, 'Puntaje total: 40 puntos. Exigencia 60 %: 24 puntos = nota 4,0. La evaluación no depende de acertar el desenlace, sino de fundamentar con las pruebas.'),
     h('table', { class: 'tabla-simple' },
-      h('thead', null, h('tr', null, h('th', null, 'Componente'), h('th', null, 'Qué se observa'), h('th', null, 'Máx.'), h('th', null, 'Dónde'))),
-      h('tbody', null, PAUTA.map(([a, b, c, d]) => h('tr', null, h('td', null, h('strong', null, a)), h('td', null, b), h('td', null, String(c)), h('td', { class: 'gris' }, d))))),
-    h('h2', { class: 'h-sec' }, 'Niveles de logro'),
-    h('table', { class: 'tabla-simple' },
-      h('thead', null, h('tr', null, h('th', null, 'Criterio de 10'), h('th', null, 'Criterio de 5'), h('th', null, 'Nivel'))),
-      h('tbody', null, NIVELES.map((r) => h('tr', null, r.map((x) => h('td', null, x)))))));
+      h('thead', null, h('tr', null, NIVELES_RUBRICA.map(([n]) => h('th', null, n)))),
+      h('tbody', null, h('tr', null, NIVELES_RUBRICA.map(([, d]) => h('td', null, d))))),
+    h('p', { class: 'nota-chica' }, 'Sin evidencia: 0 puntos.'),
+    h('h2', { class: 'h-sec' }, 'Para obtener el puntaje máximo, la respuesta…'),
+    h('div', { class: 'tabla-resp' }, h('table', { class: 'tabla-simple tabla-rubrica' },
+      h('thead', null, h('tr', null, ['N°', 'Criterio', 'Máx.', 'D', 'L', 'ED', 'I'].map((x) => h('th', null, x)))),
+      h('tbody', null, filas.map(([n, t, d, max]) => h('tr', null,
+        h('td', null, h('strong', null, n)), h('td', null, h('strong', null, t), h('br'), d), h('td', null, h('strong', null, String(max))),
+        puntajesNivel(max).map((x) => h('td', { class: 'gris' }, x)))),
+        h('tr', null, h('td', null, ''), h('td', null, h('strong', null, 'Puntaje total')), h('td', null, h('strong', null, '40')), h('td', { colspan: '4' }, '')))))) ;
 }
 
 function vistaEntrega() {
@@ -364,33 +381,36 @@ function vistaEntrega() {
     s.campos.forEach((c, i) => { if (requerido(c, S.resp) && !completo(c, S.resp)) faltan.push({ s, c, n: i + 1 }); });
   }
   const exp = S.expediente;
-  const estado = exp?.entregadoEn
-    ? h('div', { class: 'aviso aviso--ok' }, h('span', null, '✓'), h('p', null, `Entregada el ${fechaHora(exp.entregadoEn)}.${exp.editadoDespuesDeEntrega ? ' Hiciste cambios después: vuelve a entregar para que el profesor vea la última versión.' : ''}`))
-    : h('div', { class: 'aviso aviso--info' }, h('span', null, 'i'), h('p', null, 'Aún no entregas. El profesor puede ver tu avance, pero la entrega marca que terminaste tu preparación.'));
+  const vigente = entregaVigente(exp);
+  const estado = vigente
+    ? h('div', { class: 'aviso aviso--ok' }, h('span', null, '✓'), h('p', null, `Entregado el ${fechaHora(exp.entregadoEn)}.${exp.editadoDespuesDeEntrega ? ' Hiciste cambios después: vuelve a entregar para que el profesor vea la última versión.' : ''}`))
+    : exp?.entregadoEn
+      ? h('div', { class: 'aviso aviso--alerta' }, h('span', null, '!'), h('p', null, `Tu entrega anterior (${fechaHora(exp.entregadoEn)}) era de la preparación antigua y quedó guardada. Ahora debes responder y entregar el trabajo escrito.`))
+      : h('div', { class: 'aviso aviso--info' }, h('span', null, 'i'), h('p', null, 'Aún no entregas. El profesor puede ver tu avance, pero la entrega marca que terminaste tu trabajo escrito.'));
   const bWord = h('button', { type: 'button', class: 'btn btn--azul', onclick: async () => {
     bWord.disabled = true;
     try { await sv.guardarAhora(); await sv.descargarDocumento({ perfil: S.perfil, respuestas: S.resp, expediente: S.expediente }); } catch (e) { avisar(e.message, 'error'); }
     bWord.disabled = false;
   } }, 'Descargar mi Word');
   const bEntregar = h('button', { type: 'button', class: 'btn', disabled: !editable() || null, onclick: async () => {
-    const ok = await confirmar({ titulo: 'Entregar mi preparación', mensaje: faltan.length ? `Te faltan ${faltan.length} preguntas por completar. ¿Entregar igual? Podrás seguir editando mientras el profesor no cierre la edición.` : 'Podrás seguir editando mientras el profesor no cierre la edición. ¿Entregar?', ok: 'Entregar' });
+    const ok = await confirmar({ titulo: 'Entregar mi trabajo escrito', mensaje: faltan.length ? `Te faltan ${faltan.length} preguntas por completar. ¿Entregar igual? Podrás seguir editando mientras el profesor no cierre la edición.` : 'Podrás seguir editando mientras el profesor no cierre la edición. ¿Entregar?', ok: 'Entregar' });
     if (!ok) return;
     try {
       const r = await sv.enviarPreparacion({ progreso: S.avance.preparacion });
       S.expediente = { ...S.expediente, entregadoEn: r.entregadoEn, editadoDespuesDeEntrega: false, estado: 'entregada' };
-      sonar.sello?.(); avisar('Preparación entregada.', 'ok'); rutaEstudiante(document.getElementById('app'), 'entrega');
+      sonar.sello?.(); avisar('Trabajo escrito entregado.', 'ok'); rutaEstudiante(document.getElementById('app'), 'entrega');
     } catch (e) { avisar(e.message || 'No se pudo entregar.', 'error', 8000); }
-  } }, exp?.entregadoEn ? 'Volver a entregar' : 'Entregar mi preparación');
+  } }, vigente ? 'Volver a entregar' : 'Entregar mi trabajo escrito');
   return h('div', { class: 'sec' },
     h('h1', null, 'Revisar, descargar y entregar'),
     estado,
     h('table', { class: 'tabla-simple' }, h('thead', null, h('tr', null, h('th', null, 'Sección'), h('th', null, 'Respondidas'))),
-      h('tbody', null, lista.map((s) => { const a = S.avance.porSeccion[s.id]; return h('tr', null, h('td', null, h('a', { href: `#/s/${s.id}` }, s.titulo)), h('td', null, `${a.hechos} de ${a.total}${s.despues && !bloqueCAbierto() ? ' · después de la audiencia' : ''}`)); }))),
+      h('tbody', null, lista.map((s) => { const a = S.avance.porSeccion[s.id]; return h('tr', null, h('td', null, h('a', { href: `#/s/${s.id}` }, s.titulo)), h('td', null, `${a.hechos} de ${a.total}`)); }))),
     faltan.length ? h('div', null, h('h2', { class: 'h-sec' }, 'Te falta completar'),
       h('ul', null, faltan.map((f) => h('li', null, h('a', { href: `#/s/${f.s.id}`, onclick: () => setTimeout(() => document.getElementById(`p-${f.c.id}`)?.scrollIntoView({ block: 'center' }), 120) }, `${f.s.corto} · ${f.n}. ${f.c.titulo}`))))) :
-      h('p', { class: 'ok-txt' }, '✓ Tu preparación (A y B) está completa.'),
+      h('p', { class: 'ok-txt' }, '✓ Tu trabajo escrito está completo. Revísalo con la rúbrica antes de entregar.'),
     h('div', { class: 'grupo-botones' }, bWord, bEntregar),
-    h('p', { class: 'nota-chica' }, 'El Word es tu documento de apoyo durante el juicio. Si faltas, quien te reemplace lo leerá junto con tu ficha.'));
+    h('p', { class: 'nota-chica' }, 'El Word incluye tus respuestas y la rúbrica. Te sirve de apoyo durante el juicio.'));
 }
 
 /* ============================== RUTA ============================== */
@@ -401,7 +421,7 @@ export async function rutaEstudiante(app, id = 'inicio') {
   const sec = lista.find((s) => s.id === id) || lista[0];
   let cont;
   if (sec.id === 'inicio') cont = vistaInicio();
-  else if (sec.id === 'pauta') cont = vistaPauta();
+  else if (sec.id === 'rubrica') cont = vistaRubrica();
   else if (sec.id === 'entrega') cont = vistaEntrega();
   else if (!S.perfil?.personaje) cont = h('div', { class: 'sec' }, h('h1', null, sec.titulo), h('div', { class: 'aviso aviso--alerta' }, h('span', null, '!'), h('p', null, 'Esta sección aparece cuando el profesor te asigne un personaje.')));
   else cont = vistaCampos(sec);

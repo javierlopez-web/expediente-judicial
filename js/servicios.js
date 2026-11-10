@@ -14,7 +14,7 @@ import { fijarBackend, backend, modoServicios } from './registro.js';
 import { crearBackendFirebase } from './firebase-service.js';
 import { crearBackendLocal } from './local-backend.js';
 import { GestorGuardado } from './guardado.js';
-import { avance } from './contenido.js';
+import { avance, entregaVigente } from './contenido.js';
 import { aFecha } from './util.js';
 
 export { iniciarSesion, iniciarSesionProfesor, cerrarSesion, observarSesion, textoErrorAuth } from './auth-service.js';
@@ -132,7 +132,8 @@ export const docente = {
 };
 
 export function estadoDe(exp, av) {
-  if (exp?.entregadoEn) return 'entregada';
+  // Solo cuenta como entregada si se entregó el trabajo escrito (desde el 9-11-2026); lo anterior queda guardado.
+  if (entregaVigente(exp)) return 'entregada';
   if (!av || av.hechosP + av.hechosD === 0) return 'sin_iniciar';
   return 'en_desarrollo';
 }
@@ -151,7 +152,7 @@ export async function obtenerResumenDocente() {
       estado: estadoDe(expediente, av),
       ultimoGuardado: aFecha(expediente?.ultimoGuardado),
       entregadoEn: aFecha(expediente?.entregadoEn),
-      conCambiosPosteriores: Boolean(expediente?.editadoDespuesDeEntrega),
+      conCambiosPosteriores: entregaVigente(expediente) && Boolean(expediente?.editadoDespuesDeEntrega),
     };
   }).sort((a, b) => `${a.perfil.apellido} ${a.perfil.nombre}`.localeCompare(`${b.perfil.apellido} ${b.perfil.nombre}`, 'es'));
   return { config, filas };

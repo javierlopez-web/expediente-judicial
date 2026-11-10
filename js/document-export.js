@@ -1,10 +1,10 @@
 /**
  * EXPORTACIÓN A WORD (.docx real, generado en el navegador con docx.js).
  * El mismo documento lo descarga el estudiante y el profesor (uno por uno o todos en un ZIP).
- * Contiene solo lo que el estudiante escribió, en el orden de su índice: A, B y C.
+ * v4: contiene el trabajo escrito del estudiante y, al final, la rúbrica en blanco de su rol para corregir.
  */
 
-import { PERSONAJES, NOMBRE_CASOS, secciones, idsDe } from './contenido.js';
+import { PERSONAJES, NOMBRE_CASOS, secciones, idsDe, rubrica, NIVELES_RUBRICA, puntajesNivel, nombreTrabajo, entregaVigente } from './contenido.js';
 import { nombreArchivoSeguro, fechaHora, descargarBlob, capitalizar } from './util.js';
 
 const BURDEOS = '853D37';
@@ -48,9 +48,9 @@ export function estructuraDocumento(perfil, resp = {}) {
     out.push({
       titulo: s.titulo,
       campos: s.campos.map((c) => {
-        if (c.tipo === 'texto') return { titulo: c.titulo, tipo: 'texto', valor: t(resp[c.id]) };
+        if (c.tipo === 'texto') return { titulo: c.titulo, puntos: c.puntos, tipo: 'texto', valor: t(resp[c.id]) };
         if (c.tipo === 'opciones') return { titulo: c.titulo, tipo: 'texto', valor: (c.opciones.find(([v]) => v === resp[c.id]) || [])[1] || '' };
-        if (c.tipo === 'lista') return { titulo: c.titulo, tipo: 'lista', items: idsDe(c).map((id) => t(resp[id])).filter(Boolean) };
+        if (c.tipo === 'lista') return { titulo: c.titulo, puntos: c.puntos, tipo: 'lista', items: idsDe(c).map((id) => t(resp[id])).filter(Boolean) };
         const etiquetas = c.tipo === 'tablaFija' ? c.filasFijas : null;
         const nf = etiquetas ? etiquetas.length : c.filas;
         const filas = [];
@@ -59,7 +59,7 @@ export function estructuraDocumento(perfil, resp = {}) {
           if (etiquetas) filas.push([etiquetas[f - 1], ...celdas]);
           else if (celdas.some(Boolean)) filas.push(celdas);
         }
-        return { titulo: c.titulo, tipo: 'tabla', columnas: etiquetas ? ['', ...c.columnas] : c.columnas, filas, vacia: !filas.some((r) => r.slice(etiquetas ? 1 : 0).some(Boolean)) };
+        return { titulo: c.titulo, puntos: c.puntos, tipo: 'tabla', columnas: etiquetas ? ['', ...c.columnas] : c.columnas, filas, vacia: !filas.some((r) => r.slice(etiquetas ? 1 : 0).some(Boolean)) };
       }),
     });
   }
@@ -87,24 +87,38 @@ function construir(docx, perfil, resp, meta = {}) {
 
   const caso = perfil?.caso ? `Caso ${perfil.caso} · ${NOMBRE_CASOS[perfil.caso]}` : 'Sin asignar';
   const hijos = [
-    p('MI EXPEDIENTE JUDICIAL', { bold: true, size: 30, color: TINTA, after: 40 }),
-    p('Preparación individual para el juicio simulado', { color: BURDEOS, size: 22, after: 200 }),
+    p('JUICIO SIMULADO · TRABAJO ESCRITO', { bold: true, size: 20, color: BURDEOS, after: 40 }),
+    p(nombreTrabajo(perfil?.personaje) || 'Sin personaje', { bold: true, size: 32, color: TINTA, after: 40 }),
+    p('Educación Ciudadana · 3° medio · Liceo Luis Urbina Flores · Puntaje total: 40 puntos', { color: GRIS, size: 20, after: 200 }),
     tabla(['', ''], [
       ['Estudiante', `${perfil?.nombre || ''} ${perfil?.apellido || ''}`.trim()],
       ['Caso', caso],
       ['Personaje', PERSONAJES[perfil?.personaje]?.nombre || 'Sin asignar'],
-      ['Estado', meta.entregadoEn ? `Entregada el ${fechaHora(meta.entregadoEn)}` : 'Borrador (no entregada)'],
+      ['Estado', entregaVigente({ entregadoEn: meta.entregadoEn }) ? `Entregado el ${fechaHora(meta.entregadoEn)}` : 'Borrador (no entregado)'],
     ]),
   ];
   for (const s of estructuraDocumento(perfil, resp)) {
     hijos.push(p(s.titulo.toUpperCase(), { bold: true, size: 26, color: BURDEOS, after: 120, par: { spacing: { before: 360, after: 120 } } }));
     s.campos.forEach((c, i) => {
-      hijos.push(p(`${i + 1}. ${c.titulo}`, { bold: true, size: 22, par: { spacing: { before: 180, after: 60 }, keepNext: true } }));
+      hijos.push(p(`${i + 1}. ${c.titulo}${c.puntos ? ` (${c.puntos} pts)` : ''}`, { bold: true, size: 22, par: { spacing: { before: 180, after: 60 }, keepNext: true } }));
       if (c.tipo === 'texto') { if (c.valor) c.valor.split('\n').forEach((l) => hijos.push(p(l))); else hijos.push(vacio()); }
       else if (c.tipo === 'lista') { if (c.items.length) c.items.forEach((it) => hijos.push(p(`•  ${it}`))); else hijos.push(vacio()); }
       else if (c.vacia) hijos.push(vacio());
       else hijos.push(tabla(c.columnas, c.filas));
     });
+  }
+  const filasR = rubrica(perfil?.personaje);
+  if (filasR.length) {
+    hijos.push(new Paragraph({ pageBreakBefore: true, children: [] }));
+    hijos.push(p('RÚBRICA DE EVALUACIÓN', { bold: true, size: 26, color: BURDEOS, after: 60 }));
+    hijos.push(p(`${nombreTrabajo(perfil?.personaje)} · ${`${perfil?.nombre || ''} ${perfil?.apellido || ''}`.trim()} · ${caso}`, { color: GRIS, size: 20, after: 120 }));
+    hijos.push(tabla(NIVELES_RUBRICA.map(([n]) => n), [NIVELES_RUBRICA.map(([, d]) => d)]));
+    hijos.push(p('Sin evidencia: 0 puntos. Marque con un círculo el puntaje del nivel alcanzado en cada fila.', { italics: true, color: GRIS, size: 18, par: { spacing: { before: 80, after: 120 } } }));
+    hijos.push(tabla(['N°', 'Para obtener el puntaje máximo, la respuesta…', 'Máx.', 'D', 'L', 'ED', 'I', 'Obt.'], [
+      ...filasR.map(([n, tit, d, max]) => [n, `${tit}\n${d}`, String(max), ...puntajesNivel(max), '']),
+      ['', 'Puntaje total', '40', '', '', '', '', ''],
+    ]));
+    hijos.push(tabla(['Nota', 'Comentario del profesor'], [['Exigencia 60 %: 24 puntos = 4,0\n\n\n', '\n\n\n']]));
   }
   hijos.push(p(`Descargado el ${fechaHora(new Date())}`, { italics: true, color: GRIS, size: 18, par: { spacing: { before: 360 }, alignment: AlignmentType.RIGHT } }));
   return new Document({

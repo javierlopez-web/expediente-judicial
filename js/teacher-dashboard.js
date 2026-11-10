@@ -104,7 +104,7 @@ const pct = (f) => f.avance?.preparacion ?? 0;
 function celdaAvance(f) {
   if (!f.perfil.personaje) return h('span', { class: 'gris' }, 'Sin personaje');
   return h('div', { class: 'av' }, barraProgreso(pct(f), 'Avance'), h('span', { class: 'av__n' }, `${pct(f)}%`),
-    f.avance?.hechosD ? h('span', { class: 'av__c', title: 'Bloque C (reflexión y observación)' }, `C ${f.avance.despues}%`) : null);
+    null);
 }
 const chip = (f) => h('span', { class: `chip ${CHIP_ESTADO[f.estado]}` }, ETQ_ESTADO[f.estado], f.conCambiosPosteriores ? ' · con cambios' : '');
 
@@ -152,7 +152,7 @@ async function descargarTodos(boton) {
       const blob = await generarBlob(f.perfil, exp?.respuestas || {}, { entregadoEn: exp?.entregadoEn });
       zip.file(`Caso${f.perfil.caso || 'X'}/${nombreArchivo(f.perfil)}`, blob);
     }
-    descargarBlob(await zip.generateAsync({ type: 'blob' }), `Preparaciones_juicio_${new Date().toISOString().slice(0, 10)}.zip`);
+    descargarBlob(await zip.generateAsync({ type: 'blob' }), `Trabajo_escrito_juicio_${new Date().toISOString().slice(0, 10)}.zip`);
   } catch (e) { avisar(e.message || String(e), 'error', 8000); }
   boton.disabled = false; boton.textContent = txt;
 }
@@ -206,7 +206,6 @@ function vistaResumen() {
     h('h2', { class: 'h-sec' }, 'Ajustes'),
     h('div', { class: 'ajustes' },
       h('label', { class: 'opcion' }, edic, h('span', null, h('strong', null, 'Permitir edición. '), 'Si lo desactivas, nadie puede escribir (solo leer y descargar).')),
-      h('label', { class: 'opcion' }, bloqC, h('span', null, h('strong', null, 'Habilitar el bloque C. '), 'Reflexión y observación: actívalo después de las audiencias.')),
       msg, guardar));
 }
 

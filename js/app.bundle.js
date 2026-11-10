@@ -20330,53 +20330,28 @@ This typically indicates that your device does not have a healthy Internet conne
   });
 
   // ../js/contenido.js
-  function camposA(clave2) {
-    const p = PERSONAJES[clave2];
-    if (!p) return [];
-    if (A[clave2]) return A[clave2];
-    return A[p.grupo] || [];
+  function entregaVigente(exp) {
+    const d = aFechaLocal(exp?.entregadoEn);
+    return Boolean(d && d >= INICIO_TRABAJO_ESCRITO);
+  }
+  function camposTrabajo(clave2) {
+    const k2 = claveTrabajo(clave2);
+    return k2 ? TRABAJO[k2] : [];
+  }
+  function nombreTrabajo(clave2) {
+    const k2 = claveTrabajo(clave2);
+    return k2 ? NOMBRE_TRABAJO[k2] : "";
+  }
+  function rubrica(clave2) {
+    const filas = camposTrabajo(clave2).map((c, i) => [String(i + 1), c.titulo, c.criterio, c.puntos]);
+    if (filas.length) filas.push(["T", CRITERIO_TRANSVERSAL.titulo, CRITERIO_TRANSVERSAL.criterio, CRITERIO_TRANSVERSAL.puntos]);
+    return filas;
   }
   function secciones(clave2) {
     return [
       { id: "inicio", titulo: "Mi personaje", corto: "Inicio", campos: [] },
-      {
-        id: "a",
-        titulo: "A \xB7 Mi preparaci\xF3n",
-        corto: "Preparaci\xF3n",
-        bloque: "A",
-        puntos: 30,
-        campos: camposA(clave2),
-        intro: "Antes de la audiencia. Se eval\xFAa con 30 puntos: comprender tus tareas, elegir antecedentes sin alterar los hechos y preparar preguntas, declaraci\xF3n o argumentos coherentes."
-      },
-      {
-        id: "b",
-        titulo: "B \xB7 Para mi reemplazo",
-        corto: "Reemplazo",
-        bloque: "B",
-        campos: BLOQUE_B,
-        intro: "No se eval\xFAa. Si faltas a la audiencia, quien te reemplace leer\xE1 tu ficha, tu bloque A y esto. S\xE9 breve."
-      },
-      {
-        id: "c",
-        titulo: "C \xB7 Reflexi\xF3n",
-        corto: "Reflexi\xF3n",
-        bloque: "C",
-        puntos: 20,
-        campos: BLOQUE_C_REFLEXION,
-        despues: true,
-        intro: "Despu\xE9s de tu audiencia. Se eval\xFAa con 20 puntos."
-      },
-      {
-        id: "o",
-        titulo: "C \xB7 Observaci\xF3n de otro caso",
-        corto: "Observaci\xF3n",
-        bloque: "C",
-        puntos: 10,
-        campos: BLOQUE_C_OBSERVACION,
-        despues: true,
-        intro: "Mientras observas la audiencia de otro caso. Anota hechos concretos, no opiniones generales. Se eval\xFAa con 10 puntos."
-      },
-      { id: "pauta", titulo: "Pauta de evaluaci\xF3n", corto: "Pauta", campos: [] },
+      { id: "t", titulo: "Trabajo escrito", corto: "Trabajo escrito", puntos: 40, campos: camposTrabajo(clave2) },
+      { id: "rubrica", titulo: "R\xFAbrica de evaluaci\xF3n", corto: "R\xFAbrica", campos: [] },
       { id: "entrega", titulo: "Revisar, descargar y entregar", corto: "Entregar", campos: [] }
     ];
   }
@@ -20407,28 +20382,18 @@ This typically indicates that your device does not have a healthy Internet conne
     return idsDe(campo).some((id2) => lleno(resp[id2]));
   }
   function avance(clave2, resp = {}) {
-    const prep = [...camposA(clave2), ...BLOQUE_B].filter((c) => requerido(c, resp));
-    const desp = [...BLOQUE_C_REFLEXION, ...BLOQUE_C_OBSERVACION];
-    const hechosP = prep.filter((c) => completo(c, resp)).length;
-    const hechosD = desp.filter((c) => completo(c, resp)).length;
+    const campos = camposTrabajo(clave2).filter((c) => requerido(c, resp));
+    const hechos = campos.filter((c) => completo(c, resp)).length;
+    const pct2 = campos.length ? Math.round(hechos / campos.length * 100) : 0;
     const porSeccion = {};
     for (const s of secciones(clave2)) {
       if (!s.campos.length) continue;
       const cs = s.campos.filter((c) => requerido(c, resp));
       porSeccion[s.id] = { hechos: cs.filter((c) => completo(c, resp)).length, total: cs.length };
     }
-    return {
-      preparacion: prep.length ? Math.round(hechosP / prep.length * 100) : 0,
-      despues: Math.round(hechosD / desp.length * 100),
-      total: Math.round((hechosP + hechosD) / (prep.length + desp.length) * 100),
-      hechosP,
-      totalP: prep.length,
-      hechosD,
-      totalD: desp.length,
-      porSeccion
-    };
+    return { preparacion: pct2, despues: 0, total: pct2, hechosP: hechos, totalP: campos.length, hechosD: 0, totalD: 0, porSeccion };
   }
-  var PERSONAJES, LISTA_PERSONAJES, CASOS, NOMBRE_CASOS, PERSONAJES_CON_IMAGEN, SINONIMOS_PERSONAJE, TEXTOS, FUNCION, PROB, CRITERIOS, A_PARTE, A, BLOQUE_B, BLOQUE_C_REFLEXION, BLOQUE_C_OBSERVACION, lleno, contarPalabras, PAUTA, NIVELES;
+  var PERSONAJES, LISTA_PERSONAJES, CASOS, NOMBRE_CASOS, PERSONAJES_CON_IMAGEN, SINONIMOS_PERSONAJE, TEXTOS, FUNCION, PROB, CRITERIOS, A_PARTE, A, INICIO_TRABAJO_ESCRITO, aFechaLocal, INSTRUCCIONES_TRABAJO, CRITERIO_TRANSVERSAL, NIVELES_RUBRICA, puntajesNivel, ANTECEDENTES, CRITERIOS_JUEZ, VOTO_JUEZ, TRABAJO, NOMBRE_TRABAJO, claveTrabajo, lleno, contarPalabras;
   var init_contenido = __esm({
     "../js/contenido.js"() {
       PERSONAJES = {
@@ -20534,59 +20499,591 @@ This typically indicates that your device does not have a healthy Internet conne
           { id: "a4", tipo: "texto", titulo: "Pena posible y remisi\xF3n condicional", ayuda: "Seg\xFAn la hoja \xABQu\xE9 dice la ley\xBB de tu expediente.", limite: 50, filas: 2 }
         ]
       };
-      BLOQUE_B = [
-        { id: "b1", tipo: "lista", titulo: "Acuerdos con mi equipo que mi reemplazo debe respetar", ayuda: "Por ejemplo: \xABel acusado guardar\xE1 silencio\xBB o \xABla Fiscal\xEDa no me preguntar\xE1 por la distancia\xBB.", items: 3, minItems: 1 },
-        { id: "b2", tipo: "lista", titulo: "Lo indispensable que debe decir o preguntar quien me reemplace", items: 3, minItems: 1 }
+      INICIO_TRABAJO_ESCRITO = /* @__PURE__ */ new Date("2026-11-09T03:00:00Z");
+      aFechaLocal = (v) => {
+        if (!v) return null;
+        if (v instanceof Date) return v;
+        if (typeof v.toDate === "function") return v.toDate();
+        if (typeof v === "object" && typeof v.seconds === "number") return new Date(v.seconds * 1e3);
+        const d = new Date(v);
+        return Number.isNaN(d.getTime()) ? null : d;
+      };
+      INSTRUCCIONES_TRABAJO = {
+        principal: "Deja por escrito todo lo que tu personaje har\xEDa en el juicio. Trabaja con tu ficha (incluida la secci\xF3n \xABSolo t\xFA lo sabes\xBB) y con el expediente com\xFAn (hojas C02 a C07 y anexos E1 a E6).",
+        pasos: "Pasos: 1) Lee el expediente com\xFAn. 2) Lee y subraya tu ficha. 3) Responde en orden, con el n\xFAmero de cada pregunta. 4) Antes de entregar, revisa tu trabajo con la r\xFAbrica.",
+        noInventes: "No inventes hechos: si algo no aparece, escribe \xABno lo s\xE9\xBB o \xABno consta\xBB. La evaluaci\xF3n no depende de acertar el desenlace, sino de fundamentar con las pruebas."
+      };
+      CRITERIO_TRANSVERSAL = {
+        titulo: "Criterio transversal",
+        criterio: "Usa solo informaci\xF3n del expediente com\xFAn y de su ficha, sin inventar hechos; respeta las extensiones indicadas; redacta con claridad y numera sus respuestas.",
+        puntos: 4
+      };
+      NIVELES_RUBRICA = [
+        ["Destacado (D) \xB7 100 %", "Cumple todo lo indicado, con precisi\xF3n y fundamento."],
+        ["Logrado (L) \xB7 75 %", "Cumple lo indicado, con omisiones o imprecisiones menores."],
+        ["En desarrollo (ED) \xB7 50 %", "Cumple parcialmente: falta un elemento clave o hay errores."],
+        ["Inicial (I) \xB7 25 %", "Respuesta muy incompleta o con datos que no est\xE1n en el caso."]
       ];
-      BLOQUE_C_REFLEXION = [
-        { id: "c1", tipo: "texto", titulo: "\xBFC\xF3mo cumpl\xED mi funci\xF3n?", limite: 80, filas: 3, puntos: 5 },
-        { id: "c2", tipo: "texto", titulo: "\xBFQu\xE9 antecedente utilic\xE9 y qu\xE9 l\xEDmite ten\xEDa?", limite: 80, filas: 3, puntos: 10 },
-        { id: "c3", tipo: "texto", titulo: "\xBFQu\xE9 conclusi\xF3n puedo fundamentar con lo que se present\xF3?", limite: 80, filas: 3, puntos: 5 }
-      ];
-      BLOQUE_C_OBSERVACION = [
-        { id: "o1", tipo: "opciones", titulo: "Caso que observ\xE9", opciones: [["1", "Caso 1"], ["2", "Caso 2"], ["3", "Caso 3"]] },
-        {
-          id: "o2",
-          tipo: "tablaFija",
-          titulo: "Funciones: un ejemplo concreto de lo que hizo cada uno",
-          puntos: 5,
-          filasFijas: ["Fiscal\xEDa", "Defensa", "Acusado/a", "V\xEDctima, testigos y perito", "Tribunal"],
-          columnas: ["Ejemplo observado"],
-          anchos: ["30%", "70%"]
-        },
-        {
-          id: "o3",
-          tipo: "tablaFija",
-          titulo: "Pruebas y proceso justo",
-          puntos: 5,
-          filasFijas: ["Una prueba bien usada (cu\xE1l y qui\xE9n)", "Un l\xEDmite que alguien se\xF1al\xF3", "Una garant\xEDa respetada o no respetada"],
-          columnas: ["Lo que observ\xE9"],
-          anchos: ["30%", "70%"]
-        }
-      ];
+      puntajesNivel = (max) => [max, max * 0.75, max * 0.5, max * 0.25].map((x2) => String(x2).replace(".", ","));
+      ANTECEDENTES = (lado) => ({
+        id: "te2",
+        tipo: "tabla",
+        puntos: 8,
+        titulo: "Tres antecedentes que usar\xE9: qu\xE9 prueba cada uno y cu\xE1l es su l\xEDmite",
+        formato: "Tabla de 3 filas: antecedente \xB7 qu\xE9 prueba \xB7 l\xEDmite",
+        ayuda: lado === "fiscal" ? "Elige anexos (E1\u2013E6), registros de la cronolog\xEDa (C04) o declaraciones. En cada anexo lee \xABQu\xE9 no permite demostrar\xBB: ese es su l\xEDmite." : "Elige anexos (E1\u2013E6), registros de la cronolog\xEDa (C04) o declaraciones que generen duda. Lee \xABQu\xE9 no permite demostrar\xBB en cada anexo.",
+        ejemplo: lado === "fiscal" ? "L\xEDmite: \xABEl registro indica la hora, pero no qui\xE9n hizo la anotaci\xF3n\xBB." : "\xABEste registro muestra\u2026, pero no demuestra\u2026\xBB",
+        columnas: ["Antecedente", "Qu\xE9 prueba", "L\xEDmite"],
+        filas: 3,
+        minFilas: 3,
+        criterio: "Tres antecedentes reales del expediente; para cada uno indica correctamente qu\xE9 prueba y un l\xEDmite verdadero."
+      });
+      CRITERIOS_JUEZ = {
+        id: "te4",
+        tipo: "lista",
+        items: 3,
+        puntos: 8,
+        titulo: "Tres criterios que usar\xE9 para valorar la prueba",
+        formato: "3 puntos",
+        ayuda: "Por ejemplo: distinguir lo que alguien vio de lo que supone, ver si una prueba est\xE1 corroborada por otra o considerar los l\xEDmites de cada registro. Aplica cada criterio a un antecedente de tu caso.",
+        criterio: "Tres criterios pertinentes, cada uno aplicado a un antecedente del caso."
+      };
+      VOTO_JUEZ = {
+        id: "te5",
+        tipo: "texto",
+        limite: 120,
+        filas: 6,
+        puntos: 8,
+        titulo: "Mi voto fundamentado",
+        formato: "M\xE1ximo 120 palabras",
+        ayuda: "Con lo que consta en el expediente com\xFAn y tus criterios, decide si condenas o absuelves. Incluye qu\xE9 hechos se acreditaron y con qu\xE9 prueba, qu\xE9 dudas quedan y si se supera la duda razonable (art. 340). No se eval\xFAa acertar el desenlace.",
+        criterio: "Decisi\xF3n clara, hechos acreditados con su prueba, dudas que quedan y aplicaci\xF3n correcta del est\xE1ndar de duda razonable."
+      };
+      TRABAJO = {
+        fiscal: [
+          {
+            id: "te1",
+            tipo: "texto",
+            filas: 3,
+            puntos: 4,
+            titulo: "Mi teor\xEDa del caso",
+            formato: "2 o 3 oraciones",
+            ayuda: "Cuenta qu\xE9 ocurri\xF3 seg\xFAn la Fiscal\xEDa respondiendo qui\xE9n, qu\xE9, cu\xE1ndo, d\xF3nde y c\xF3mo. Parte del \xABPunto de partida\xBB de tu ficha y escr\xEDbelo con tus palabras.",
+            ejemplo: "\xABLa Fiscal\xEDa sostiene que\u2026\xBB",
+            criterio: "Responde qui\xE9n, qu\xE9, cu\xE1ndo, d\xF3nde y c\xF3mo; es coherente con la acusaci\xF3n (C02) y no agrega hechos."
+          },
+          ANTECEDENTES("fiscal"),
+          {
+            id: "te3",
+            tipo: "texto",
+            limite: 120,
+            filas: 6,
+            puntos: 4,
+            titulo: "Alegato de apertura",
+            formato: "M\xE1ximo 120 palabras",
+            ayuda: "Di qu\xE9 ocurri\xF3, con qu\xE9 declarantes y anexos lo demostrar\xE1s y qu\xE9 pedir\xE1s (delito y pena en C02). Todav\xEDa no argumentes.",
+            ejemplo: "\xABCon la venia del tribunal. Esta Fiscal\xEDa demostrar\xE1 que\u2026\xBB",
+            criterio: "Anuncia qu\xE9 ocurri\xF3, qu\xE9 prueba lo demostrar\xE1 y qu\xE9 pena pedir\xE1, sin argumentar todav\xEDa."
+          },
+          {
+            id: "te4",
+            tipo: "tabla",
+            puntos: 4,
+            titulo: "Examen directo: tres preguntas abiertas para cada declarante propio y la respuesta que espero",
+            formato: "Una lista por declarante",
+            ayuda: "Revisa \xABTus declarantes\xBB en tu ficha. Usa preguntas que empiecen con qu\xE9, d\xF3nde, cu\xE1ndo o c\xF3mo. Junto a cada una, anota la respuesta que esperas seg\xFAn lo que declar\xF3 en la investigaci\xF3n.",
+            columnas: ["Declarante", "Mis 3 preguntas abiertas y la respuesta que espero (una por l\xEDnea)"],
+            filas: 4,
+            minFilas: 1,
+            anchos: ["24%", "76%"],
+            multilinea: true,
+            criterio: "Tres preguntas abiertas y no sugestivas por declarante, con respuestas esperadas coherentes con lo declarado."
+          },
+          {
+            id: "te5",
+            tipo: "tabla",
+            puntos: 4,
+            titulo: "Contraexamen: dos o tres preguntas cerradas para cada declarante de la Defensa y qu\xE9 busco mostrar",
+            formato: "Una lista por declarante (incluye al acusado)",
+            ayuda: "Preguntas cortas, de s\xED o no, con un tema por pregunta, sobre los l\xEDmites de lo que percibi\xF3 (distancia, hora, qu\xE9 no vio). No preguntes \xAB\xBFpor qu\xE9?\xBB.",
+            columnas: ["Declarante", "Mis preguntas cerradas (una por l\xEDnea)", "Qu\xE9 busco mostrar"],
+            filas: 4,
+            minFilas: 1,
+            anchos: ["20%", "50%", "30%"],
+            multilinea: true,
+            criterio: "Preguntas cerradas y breves, con un tema cada una, dirigidas a los l\xEDmites de cada declarante de la Defensa."
+          },
+          {
+            id: "te6",
+            tipo: "tabla",
+            puntos: 4,
+            titulo: "Dos argumentos u objeciones de la Defensa que anticipo y c\xF3mo los responder\xE9",
+            formato: "2 filas: lo que dir\xE1 la Defensa \xB7 mi respuesta",
+            ayuda: "Usa \xABPuntos d\xE9biles que debes anticipar\xBB de tu ficha. Responde cada uno con un antecedente concreto.",
+            columnas: ["Lo que dir\xE1 la Defensa", "Mi respuesta"],
+            filas: 2,
+            minFilas: 2,
+            criterio: "Identifica dos argumentos plausibles de la Defensa y responde cada uno con un antecedente."
+          },
+          {
+            id: "te7",
+            tipo: "texto",
+            limite: 150,
+            filas: 7,
+            puntos: 8,
+            titulo: "Alegato de clausura",
+            formato: "M\xE1ximo 150 palabras",
+            ayuda: "Escr\xEDbelo suponiendo que los declarantes respondieron como anticipaste en la pregunta 4. Orden: lo que prometiste probar \u2192 \xABQued\xF3 acreditado que\u2026, seg\xFAn\u2026\xBB \u2192 \xABLa Defensa dir\xE1 que\u2026, pero\u2026\xBB \u2192 la pena que pides.",
+            criterio: "Relaciona cada hecho con una prueba espec\xEDfica, responde la duda que plantea la Defensa y pide una pena dentro del rango legal; es coherente con 1 y 2."
+          }
+        ],
+        defensor: [
+          {
+            id: "te1",
+            tipo: "texto",
+            filas: 3,
+            puntos: 4,
+            titulo: "Mi teor\xEDa del caso",
+            formato: "2 o 3 oraciones",
+            ayuda: "No tienes que probar la inocencia: muestra qu\xE9 duda razonable queda o qu\xE9 otra explicaci\xF3n no se descart\xF3. No acuses a otra persona sin prueba.",
+            ejemplo: "\xABLa Defensa sostiene que la Fiscal\xEDa no puede probar que\u2026\xBB",
+            criterio: "Plantea una duda razonable o una explicaci\xF3n alternativa concreta, coherente con el expediente y sin acusar a nadie sin prueba."
+          },
+          ANTECEDENTES("defensor"),
+          {
+            id: "te3",
+            tipo: "texto",
+            limite: 120,
+            filas: 6,
+            puntos: 4,
+            titulo: "Alegato de apertura",
+            formato: "M\xE1ximo 120 palabras",
+            ayuda: "Di qu\xE9 no podr\xE1 probar la Fiscal\xEDa, con qu\xE9 prueba lo mostrar\xE1s y qu\xE9 pedir\xE1s. Recuerda la presunci\xF3n de inocencia. Todav\xEDa no argumentes.",
+            ejemplo: "\xABCon la venia del tribunal. Esta Defensa demostrar\xE1 que\u2026\xBB",
+            criterio: "Anuncia qu\xE9 no podr\xE1 probar la Fiscal\xEDa, con qu\xE9 prueba lo mostrar\xE1 y pide la absoluci\xF3n."
+          },
+          {
+            id: "te4",
+            tipo: "tabla",
+            puntos: 4,
+            titulo: "Examen directo: tres preguntas abiertas para cada declarante propio y la respuesta que espero",
+            formato: "Una lista por declarante (incluye al acusado)",
+            ayuda: "Revisa tu ficha. Usa preguntas que empiecen con qu\xE9, d\xF3nde, cu\xE1ndo o c\xF3mo. Junto a cada una, anota la respuesta que esperas seg\xFAn lo que declar\xF3 en la investigaci\xF3n.",
+            columnas: ["Declarante", "Mis 3 preguntas abiertas y la respuesta que espero (una por l\xEDnea)"],
+            filas: 4,
+            minFilas: 1,
+            anchos: ["24%", "76%"],
+            multilinea: true,
+            criterio: "Tres preguntas abiertas y no sugestivas por declarante, con respuestas esperadas coherentes con lo declarado."
+          },
+          {
+            id: "te5",
+            tipo: "tabla",
+            puntos: 4,
+            titulo: "Contraexamen: dos o tres preguntas cerradas para cada declarante de la Fiscal\xEDa y qu\xE9 busco mostrar",
+            formato: "Una lista por declarante (incluye al perito)",
+            ayuda: "Preguntas cortas, de s\xED o no, con un tema por pregunta, sobre los l\xEDmites de lo percibido o examinado (distancia, hora, qu\xE9 no vio, qu\xE9 no analiz\xF3). No preguntes \xAB\xBFpor qu\xE9?\xBB.",
+            columnas: ["Declarante", "Mis preguntas cerradas (una por l\xEDnea)", "Qu\xE9 busco mostrar"],
+            filas: 4,
+            minFilas: 1,
+            anchos: ["20%", "50%", "30%"],
+            multilinea: true,
+            criterio: "Preguntas cerradas y breves, con un tema cada una, dirigidas a los l\xEDmites de cada declarante de la Fiscal\xEDa."
+          },
+          {
+            id: "te6",
+            tipo: "tabla",
+            puntos: 4,
+            titulo: "Dos argumentos u objeciones de la Fiscal\xEDa que anticipo y c\xF3mo los responder\xE9",
+            formato: "2 filas: lo que dir\xE1 la Fiscal\xEDa \xB7 mi respuesta",
+            ayuda: "Piensa en la prueba m\xE1s fuerte de la Fiscal\xEDa. Responde cada argumento con un antecedente o con un l\xEDmite de esa prueba.",
+            columnas: ["Lo que dir\xE1 la Fiscal\xEDa", "Mi respuesta"],
+            filas: 2,
+            minFilas: 2,
+            criterio: "Identifica dos argumentos plausibles de la Fiscal\xEDa y responde cada uno con un antecedente o un l\xEDmite."
+          },
+          {
+            id: "te7",
+            tipo: "texto",
+            limite: 150,
+            filas: 7,
+            puntos: 8,
+            titulo: "Alegato de clausura",
+            formato: "M\xE1ximo 150 palabras",
+            ayuda: "Escr\xEDbelo suponiendo que los declarantes respondieron como anticipaste en las preguntas 4 y 5. Orden: qu\xE9 no se prob\xF3 \u2192 por qu\xE9 queda una duda razonable, con los antecedentes \u2192 presunci\xF3n de inocencia \u2192 petici\xF3n de absoluci\xF3n.",
+            criterio: "Se\xF1ala qu\xE9 no se prob\xF3 y por qu\xE9 queda una duda razonable, con antecedentes concretos; pide la absoluci\xF3n; es coherente con 1 y 2."
+          }
+        ],
+        acusado: [
+          {
+            id: "te1",
+            tipo: "texto",
+            filas: 2,
+            puntos: 4,
+            titulo: "Qu\xE9 quiero lograr con mi declaraci\xF3n",
+            formato: "2 oraciones",
+            ayuda: "Vas a declarar ante el tribunal. Indica qu\xE9 punto de la acusaci\xF3n quieres aclarar o poner en duda y con qu\xE9 fin lo haces.",
+            ejemplo: "\xABDeclaro para que el tribunal sepa que\u2026, porque\u2026\xBB",
+            criterio: "Identifica un punto concreto de la acusaci\xF3n y explica con qu\xE9 fin declara sobre \xE9l."
+          },
+          {
+            id: "te2",
+            tipo: "texto",
+            filas: 5,
+            puntos: 8,
+            titulo: "Mi declaraci\xF3n ante el tribunal, solo con hechos de mi ficha",
+            formato: "3 a 5 oraciones",
+            ayuda: "Usa primera persona y este orden: d\xF3nde estaba, qu\xE9 hice, qu\xE9 vi y qu\xE9 hice despu\xE9s. No acuses a nadie.",
+            ejemplo: "\xABEse d\xEDa yo estaba en\u2026\xBB",
+            criterio: "Declaraci\xF3n en primera persona, ordenada, solo con hechos de su ficha y sin acusar a otros."
+          },
+          {
+            id: "te3",
+            tipo: "tabla",
+            puntos: 8,
+            titulo: "Cuatro preguntas probables (dos de la Defensa y dos de la Fiscal\xEDa), mis respuestas y con qu\xE9 fin respondo as\xED",
+            formato: "Tabla de 4 filas: qui\xE9n pregunta \xB7 pregunta \xB7 mi respuesta \xB7 con qu\xE9 fin",
+            ayuda: "La Defensa hace preguntas abiertas; la Fiscal\xEDa, cerradas e inc\xF3modas. Al menos una pregunta debe tocar un dato de \xABSolo t\xFA lo sabes\xBB: resp\xF3ndela con la verdad de tu ficha. En la \xFAltima columna explica qu\xE9 buscas que el tribunal entienda con esa respuesta.",
+            columnas: ["Qui\xE9n pregunta", "Pregunta", "Mi respuesta", "Con qu\xE9 fin"],
+            filas: 4,
+            minFilas: 4,
+            anchos: ["15%", "28%", "30%", "27%"],
+            criterio: "Cuatro preguntas pertinentes (2 + 2), con respuestas fieles a la ficha y su finalidad explicada; al menos una revela un dato exclusivo cuando corresponde."
+          },
+          {
+            id: "te4",
+            tipo: "texto",
+            filas: 2,
+            puntos: 4,
+            titulo: "Un riesgo de declarar y c\xF3mo lo enfrentar\xE9",
+            formato: "2 oraciones",
+            ayuda: "Piensa en la pregunta de la Fiscal\xEDa que m\xE1s te perjudicar\xEDa. Explica c\xF3mo la responder\xEDas sin mentir ni inventar.",
+            criterio: "Identifica un riesgo real del contraexamen y una forma veraz de enfrentarlo."
+          },
+          {
+            id: "te5",
+            tipo: "lista",
+            items: 3,
+            puntos: 4,
+            titulo: "Lo que no s\xE9 y no debo inventar",
+            formato: "3 puntos",
+            ayuda: "Revisa \xABLo que no sabes\xBB en tu ficha.",
+            ejemplo: "\xABNo s\xE9\u2026, porque\u2026\xBB",
+            criterio: "Tres l\xEDmites reales de su conocimiento, sin inventar."
+          },
+          {
+            id: "te6",
+            tipo: "texto",
+            filas: 2,
+            puntos: 4,
+            titulo: "Mis \xFAltimas palabras y con qu\xE9 fin las digo",
+            formato: "2 oraciones",
+            ayuda: "Habla con serenidad y respeto, sin atacar a nadie. Explica qu\xE9 quieres que el tribunal considere antes de decidir.",
+            criterio: "Breves, respetuosas, coherentes con su versi\xF3n y con una finalidad clara."
+          },
+          {
+            id: "te7",
+            tipo: "texto",
+            limite: 80,
+            filas: 4,
+            puntos: 4,
+            titulo: "Fuera del personaje: \xBFalcanza la prueba para condenar?",
+            formato: "M\xE1ximo 80 palabras",
+            ayuda: "Responde ahora como estudiante. Con lo que consta en el expediente com\xFAn, \xBFpodr\xEDa la Fiscal\xEDa probar la acusaci\xF3n m\xE1s all\xE1 de toda duda razonable? Menciona un antecedente y su l\xEDmite.",
+            criterio: "Concluye sobre la duda razonable y la fundamenta con un antecedente y su l\xEDmite."
+          }
+        ],
+        /* Víctima, Testigo 1 y Testigo 2: las mismas preguntas. */
+        declarante: [
+          {
+            id: "te1",
+            tipo: "texto",
+            filas: 2,
+            puntos: 4,
+            titulo: "Qui\xE9n me presenta y para qu\xE9 sirve mi declaraci\xF3n",
+            formato: "1 o 2 oraciones",
+            ayuda: "En \xABQui\xE9nes participan\xBB (C03) dice si declaras por la Fiscal\xEDa o por la Defensa. Explica qu\xE9 parte de la acusaci\xF3n ayuda a probar o a poner en duda tu declaraci\xF3n.",
+            criterio: "Identifica correctamente la parte que lo presenta y qu\xE9 hecho apoya o pone en duda su declaraci\xF3n."
+          },
+          {
+            id: "te2",
+            tipo: "texto",
+            filas: 5,
+            puntos: 8,
+            titulo: "Mi relato inicial, solo con lo que percib\xED",
+            formato: "3 a 5 oraciones",
+            ayuda: "Usa primera persona y este orden: qui\xE9n soy, d\xF3nde estaba, qu\xE9 vi u o\xED y qu\xE9 hice despu\xE9s. Usa solo \xABLo que sabes\xBB. Los datos de \xABSolo t\xFA lo sabes\xBB no van aqu\xED: se responden en la pregunta 5.",
+            ejemplo: "\xABSoy\u2026, ese d\xEDa estaba en\u2026\xBB",
+            criterio: "Relato en primera persona, solo con lo percibido, sin adelantar datos exclusivos."
+          },
+          {
+            id: "te3",
+            tipo: "lista",
+            items: 3,
+            puntos: 4,
+            titulo: "Tres cosas que vi u o\xED",
+            formato: "3 puntos",
+            ayuda: "Hechos concretos, con hora o lugar si los conoces. Empieza con \xABVi\u2026\xBB o \xABEscuch\xE9\u2026\xBB, nunca con \xABCreo que\u2026\xBB.",
+            criterio: "Tres percepciones concretas (vi, escuch\xE9), sin suposiciones."
+          },
+          {
+            id: "te4",
+            tipo: "lista",
+            items: 2,
+            puntos: 4,
+            titulo: "Dos cosas que no s\xE9 o no vi",
+            formato: "2 puntos",
+            ayuda: "Revisa \xABLo que no sabes\xBB. Un buen testigo reconoce sus l\xEDmites.",
+            criterio: "Dos l\xEDmites reales de lo que sabe o vio."
+          },
+          {
+            id: "te5",
+            tipo: "tabla",
+            puntos: 8,
+            titulo: "Cuatro preguntas probables y mis respuestas",
+            formato: "Tabla de 4 filas: qui\xE9n pregunta \xB7 pregunta \xB7 mi respuesta",
+            ayuda: "Escribe dos preguntas de la parte que te presenta (abiertas) y dos de la contraparte (cerradas). Al menos una debe tocar un tema de \xABSolo t\xFA lo sabes\xBB: ah\xED revelas ese dato.",
+            columnas: ["Qui\xE9n pregunta", "Pregunta", "Mi respuesta"],
+            filas: 4,
+            minFilas: 4,
+            anchos: ["18%", "38%", "44%"],
+            criterio: "Cuatro preguntas pertinentes (abiertas de su parte, cerradas de la contraparte) con respuestas fieles a la ficha; revela un dato exclusivo cuando corresponde."
+          },
+          {
+            id: "te6",
+            tipo: "texto",
+            filas: 2,
+            puntos: 4,
+            titulo: "Qu\xE9 har\xE9 si me preguntan algo que no s\xE9 o si me presionan",
+            formato: "2 oraciones",
+            ayuda: "Piensa en frases concretas: \xABNo lo s\xE9\xBB, \xABNo lo vi\xBB, \xAB\xBFPuede repetir la pregunta?\xBB.",
+            criterio: "Reconoce que no sabe sin inventar y mantiene la calma (pide que repitan, no discute)."
+          },
+          {
+            id: "te7",
+            tipo: "texto",
+            limite: 80,
+            filas: 4,
+            puntos: 4,
+            titulo: "Fuera del personaje: \xBFqu\xE9 valor tiene mi declaraci\xF3n?",
+            formato: "M\xE1ximo 80 palabras",
+            ayuda: "Responde ahora como estudiante: \xBFqu\xE9 puede probar tu declaraci\xF3n y qu\xE9 no? \xBFBasta por s\xED sola para condenar o absolver? Fundamenta.",
+            criterio: "Distingue qu\xE9 prueba y qu\xE9 no su declaraci\xF3n, y explica si basta por s\xED sola."
+          }
+        ],
+        perito: [
+          {
+            id: "te1",
+            tipo: "texto",
+            filas: 2,
+            puntos: 4,
+            titulo: "Qu\xE9 me encargaron y qu\xE9 examin\xE9",
+            formato: "2 oraciones",
+            ayuda: "Lee el informe pericial en los anexos y tu ficha. Indica qui\xE9n pidi\xF3 el peritaje y sobre qu\xE9 objeto o registro trabajaste.",
+            criterio: "Indica correctamente el encargo y lo examinado, seg\xFAn el informe."
+          },
+          {
+            id: "te2",
+            tipo: "texto",
+            limite: 80,
+            filas: 4,
+            puntos: 8,
+            titulo: "Mi conclusi\xF3n con palabras simples y un ejemplo cotidiano",
+            formato: "M\xE1ximo 80 palabras",
+            ayuda: "Traduce los t\xE9rminos t\xE9cnicos (por ejemplo, \xABcompatible\xBB o \xABno concluyente\xBB). El perito explica resultados; no dice qui\xE9n es culpable.",
+            ejemplo: "\xABEn palabras simples, encontr\xE9 que\u2026; es como cuando\u2026\xBB",
+            criterio: "Conclusi\xF3n correcta, explicada con palabras simples y un ejemplo adecuado, sin pronunciarse sobre la culpabilidad."
+          },
+          {
+            id: "te3",
+            tipo: "lista",
+            items: 3,
+            puntos: 8,
+            titulo: "Tres l\xEDmites de mi examen",
+            formato: "3 puntos",
+            ayuda: "Piensa en qu\xE9 no examinaste, qu\xE9 no puede concluir el informe y qu\xE9 otra explicaci\xF3n no descarta.",
+            criterio: "Tres l\xEDmites reales del examen."
+          },
+          {
+            id: "te4",
+            tipo: "tabla",
+            puntos: 8,
+            titulo: "Cuatro preguntas probables y mis respuestas",
+            formato: "Tabla de 4 filas: qui\xE9n pregunta \xB7 pregunta \xB7 mi respuesta",
+            ayuda: "Escribe dos preguntas de la parte que te presenta y dos de la contraparte. Al menos una debe tocar un tema de \xABSolo t\xFA lo sabes\xBB.",
+            columnas: ["Qui\xE9n pregunta", "Pregunta", "Mi respuesta"],
+            filas: 4,
+            minFilas: 4,
+            anchos: ["18%", "38%", "44%"],
+            criterio: "Cuatro preguntas pertinentes (2 + 2) con respuestas t\xE9cnicas fieles a la ficha; revela un dato exclusivo cuando corresponde."
+          },
+          {
+            id: "te5",
+            tipo: "texto",
+            limite: 80,
+            filas: 4,
+            puntos: 8,
+            titulo: "Fuera del personaje: \xBFcu\xE1nto aporta el informe pericial?",
+            formato: "M\xE1ximo 80 palabras",
+            ayuda: "Responde ahora como estudiante: \xBFqu\xE9 peso deber\xEDa darle el tribunal al informe? \xBFQu\xE9 otra prueba har\xEDa falta para llegar a una conclusi\xF3n?",
+            criterio: "Valora con fundamento el peso del informe y se\xF1ala qu\xE9 otra prueba har\xEDa falta."
+          }
+        ],
+        juez_presidente: [
+          {
+            id: "te1",
+            tipo: "texto",
+            limite: 80,
+            filas: 4,
+            puntos: 8,
+            titulo: "Mi apertura de la audiencia",
+            formato: "M\xE1ximo 80 palabras",
+            ayuda: "Individualiza el caso (C02) y a las partes (C03), y recu\xE9rdale al acusado sus derechos: presunci\xF3n de inocencia, guardar silencio, hablar con su defensa y decir unas \xFAltimas palabras. Ap\xF3yate en el guion de tu ficha.",
+            ejemplo: "\xABSe abre la audiencia del juicio oral en contra de\u2026\xBB",
+            criterio: "Individualiza el caso y a las partes, y recuerda correctamente los derechos del acusado."
+          },
+          {
+            id: "te2",
+            tipo: "texto",
+            filas: 7,
+            puntos: 4,
+            titulo: "Orden de intervenci\xF3n de mi caso",
+            formato: "Lista numerada",
+            ayuda: "Usa las etapas de C05 y los turnos de C03. Escribe los nombres de los declarantes en su orden.",
+            ejemplo: "1. \u2026 2. \u2026 3. \u2026",
+            criterio: "Orden completo y correcto de las etapas y de los declarantes de su caso."
+          },
+          {
+            id: "te3",
+            tipo: "tabla",
+            puntos: 8,
+            titulo: "C\xF3mo resolver\xE9 dos objeciones de ejemplo",
+            formato: "2 filas: objeci\xF3n \xB7 mi resoluci\xF3n y por qu\xE9",
+            ayuda: "Imagina dos objeciones posibles con declarantes de tu caso (por ejemplo, una pregunta sugestiva en el examen directo o un testigo que especula). Resuelve \xABHa lugar\xBB o \xABNo ha lugar\xBB y explica por qu\xE9, seg\xFAn C06.",
+            columnas: ["Objeci\xF3n", "Mi resoluci\xF3n y por qu\xE9"],
+            filas: 2,
+            minFilas: 2,
+            criterio: "Dos objeciones plausibles, resueltas con \xABha lugar\xBB o \xABno ha lugar\xBB y un fundamento procesal correcto."
+          },
+          CRITERIOS_JUEZ,
+          VOTO_JUEZ
+        ],
+        juez_preguntas: [
+          {
+            id: "te1",
+            tipo: "tabla",
+            puntos: 8,
+            titulo: "Tres puntos del caso que habr\xEDa que aclarar, y por qu\xE9",
+            formato: "Tabla de 3 filas: punto \xB7 por qu\xE9 genera duda",
+            ayuda: "Busca horas que no calzan, registros confusos, qui\xE9n ten\xEDa acceso o a qu\xE9 distancia estaba alguien (C04 y anexos).",
+            columnas: ["Punto", "Por qu\xE9 genera duda"],
+            filas: 3,
+            minFilas: 3,
+            criterio: "Tres puntos que generan una duda real, con su raz\xF3n y la referencia al expediente."
+          },
+          {
+            id: "te2",
+            tipo: "tabla",
+            puntos: 8,
+            titulo: "Dos preguntas aclaratorias neutras para cada declarante",
+            formato: "Una lista por declarante",
+            ayuda: "Que sean breves, neutras y sobre lo que el declarante ya dijo en la investigaci\xF3n. Bien: \xAB\xBFA qu\xE9 distancia estaba?\xBB. Mal: \xAB\xBFNo le parece raro que\u2026?\xBB.",
+            columnas: ["Declarante", "Mis dos preguntas (una por l\xEDnea)"],
+            filas: 6,
+            minFilas: 3,
+            anchos: ["28%", "72%"],
+            multilinea: true,
+            criterio: "Dos preguntas por declarante, breves y neutras, que aclaran sin abrir temas nuevos."
+          },
+          {
+            id: "te3",
+            tipo: "texto",
+            filas: 3,
+            puntos: 4,
+            titulo: "Diferencia entre aclarar y abrir un tema nuevo, con un ejemplo de cada uno",
+            formato: "2 oraciones",
+            ayuda: "Recuerda que el juez solo pregunta para aclarar lo ya declarado, despu\xE9s de las partes (art. 329).",
+            criterio: "Distingue correctamente ambos casos, con un ejemplo adecuado de cada uno."
+          },
+          CRITERIOS_JUEZ,
+          VOTO_JUEZ
+        ],
+        juez_decision: [
+          {
+            id: "te1",
+            tipo: "tabla",
+            puntos: 8,
+            titulo: "Qu\xE9 debe probar la Fiscal\xEDa y con qu\xE9 prueba lo intentar\xE1",
+            formato: "Tabla: hecho por probar \xB7 prueba anunciada",
+            ayuda: "Separa los hechos de la acusaci\xF3n (C02), como qu\xE9 ocurri\xF3 con el objeto y qui\xE9n lo hizo, y asocia a cada uno los declarantes (C03) y los anexos que la Fiscal\xEDa usar\xE1.",
+            columnas: ["Hecho por probar", "Prueba anunciada"],
+            filas: 4,
+            minFilas: 2,
+            criterio: "Distingue los hechos por probar y asocia a cada uno la prueba anunciada que corresponde."
+          },
+          {
+            id: "te2",
+            tipo: "lista",
+            items: 3,
+            puntos: 4,
+            titulo: "Tres preguntas para guiar la deliberaci\xF3n",
+            formato: "3 puntos",
+            ayuda: "Que sean propias de tu caso, no generales. Piensa en lo que el tribunal tendr\xEDa que resolver para decidir.",
+            criterio: "Tres preguntas espec\xEDficas del caso que ordenan la deliberaci\xF3n."
+          },
+          {
+            id: "te3",
+            tipo: "texto",
+            limite: 150,
+            filas: 7,
+            puntos: 12,
+            titulo: "Mi veredicto fundamentado",
+            formato: "M\xE1ximo 150 palabras",
+            ayuda: "Red\xE1ctalo completo con lo que consta en el expediente com\xFAn: decisi\xF3n, hechos acreditados y su prueba, lo que no se acredit\xF3 y si se supera la duda razonable (art. 340).",
+            ejemplo: "\xABEl tribunal resuelve\u2026; se acredit\xF3 que\u2026, seg\xFAn\u2026; en cambio, no se acredit\xF3\u2026; por lo tanto\u2026\xBB",
+            criterio: "Decisi\xF3n clara; hechos acreditados con su prueba y hechos no acreditados; aplica bien el est\xE1ndar de duda razonable; es coherente."
+          },
+          {
+            id: "te4",
+            tipo: "texto",
+            filas: 2,
+            puntos: 4,
+            titulo: "Pena posible y remisi\xF3n condicional",
+            formato: "2 oraciones",
+            ayuda: "Usa C02 y \xABQu\xE9 dice la ley\xBB (C07). Si absuelves, explica igual qu\xE9 pena corresponder\xEDa en caso de condena.",
+            criterio: "Indica una pena dentro del rango legal y analiza correctamente la remisi\xF3n condicional."
+          },
+          {
+            id: "te5",
+            tipo: "texto",
+            limite: 80,
+            filas: 4,
+            puntos: 8,
+            titulo: "El voto disidente",
+            formato: "M\xE1ximo 80 palabras",
+            ayuda: "\xBFQu\xE9 argumento usar\xEDa una jueza o un juez que votara distinto a ti? Fundam\xE9ntalo con un antecedente. As\xED muestras que consideraste la otra lectura de la prueba.",
+            criterio: "Argumento contrario plausible, fundado en un antecedente del expediente."
+          }
+        ]
+      };
+      NOMBRE_TRABAJO = {
+        fiscal: "Fiscal",
+        defensor: "Defensor o defensora",
+        acusado: "Acusado o acusada",
+        declarante: "V\xEDctima o testigo",
+        perito: "Perito",
+        juez_presidente: "Jueza o juez presidente",
+        juez_preguntas: "Jueza o juez de preguntas aclaratorias",
+        juez_decision: "Jueza o juez de decisi\xF3n"
+      };
+      claveTrabajo = (clave2) => {
+        const p = PERSONAJES[clave2];
+        if (!p) return null;
+        if (TRABAJO[clave2]) return clave2;
+        return p.grupo === "declarante" ? "declarante" : null;
+      };
       lleno = (v) => String(v ?? "").trim().length > 0;
       contarPalabras = (t2) => (String(t2 ?? "").trim().match(/\S+/g) || []).length;
-      PAUTA = [
-        ["Preparaci\xF3n individual", "Comprende y prepara las tareas espec\xEDficas de su rol", 10, "Bloque A"],
-        ["", "Selecciona antecedentes pertinentes sin alterar los hechos", 10, "Bloque A"],
-        ["", "Prepara preguntas, declaraci\xF3n o argumentos coherentes", 10, "Bloque A"],
-        ["Participaci\xF3n", "Cumple las funciones de su personaje", 10, "Audiencia"],
-        ["", "Usa adecuadamente los antecedentes disponibles", 10, "Audiencia"],
-        ["", "Respeta turnos, l\xEDmites del rol y garant\xEDas del proceso", 10, "Audiencia"],
-        ["", "Fundamenta lo que afirma seg\xFAn su funci\xF3n", 10, "Audiencia"],
-        ["Reflexi\xF3n", "Explica c\xF3mo cumpli\xF3 su funci\xF3n", 5, "Bloque C \xB7 pregunta 1"],
-        ["", "Analiza un antecedente y sus limitaciones", 10, "Bloque C \xB7 pregunta 2"],
-        ["", "Fundamenta una conclusi\xF3n sobre el juicio", 5, "Bloque C \xB7 pregunta 3"],
-        ["Observaci\xF3n", "Identifica correctamente funciones de participantes", 5, "Observaci\xF3n \xB7 funciones"],
-        ["", "Reconoce uso de pruebas y respeto del proceso justo", 5, "Observaci\xF3n \xB7 pruebas"]
-      ];
-      NIVELES = [
-        ["10", "5", "Destacado: cumple de manera precisa y aut\xF3noma"],
-        ["8", "4", "Logrado: cumple adecuadamente"],
-        ["5", "2", "En desarrollo: cumple parcialmente"],
-        ["2", "1", "Inicial: presenta dificultades importantes"],
-        ["0", "0", "Sin evidencia evaluable"]
-      ];
     }
   });
 
@@ -21251,9 +21748,9 @@ This typically indicates that your device does not have a healthy Internet conne
       out.push({
         titulo: s.titulo,
         campos: s.campos.map((c) => {
-          if (c.tipo === "texto") return { titulo: c.titulo, tipo: "texto", valor: t(resp[c.id]) };
+          if (c.tipo === "texto") return { titulo: c.titulo, puntos: c.puntos, tipo: "texto", valor: t(resp[c.id]) };
           if (c.tipo === "opciones") return { titulo: c.titulo, tipo: "texto", valor: (c.opciones.find(([v]) => v === resp[c.id]) || [])[1] || "" };
-          if (c.tipo === "lista") return { titulo: c.titulo, tipo: "lista", items: idsDe(c).map((id2) => t(resp[id2])).filter(Boolean) };
+          if (c.tipo === "lista") return { titulo: c.titulo, puntos: c.puntos, tipo: "lista", items: idsDe(c).map((id2) => t(resp[id2])).filter(Boolean) };
           const etiquetas = c.tipo === "tablaFija" ? c.filasFijas : null;
           const nf2 = etiquetas ? etiquetas.length : c.filas;
           const filas = [];
@@ -21262,7 +21759,7 @@ This typically indicates that your device does not have a healthy Internet conne
             if (etiquetas) filas.push([etiquetas[f - 1], ...celdas]);
             else if (celdas.some(Boolean)) filas.push(celdas);
           }
-          return { titulo: c.titulo, tipo: "tabla", columnas: etiquetas ? ["", ...c.columnas] : c.columnas, filas, vacia: !filas.some((r) => r.slice(etiquetas ? 1 : 0).some(Boolean)) };
+          return { titulo: c.titulo, puntos: c.puntos, tipo: "tabla", columnas: etiquetas ? ["", ...c.columnas] : c.columnas, filas, vacia: !filas.some((r) => r.slice(etiquetas ? 1 : 0).some(Boolean)) };
         })
       });
     }
@@ -21289,19 +21786,20 @@ This typically indicates that your device does not have a healthy Internet conne
     });
     const caso = perfil?.caso ? `Caso ${perfil.caso} \xB7 ${NOMBRE_CASOS[perfil.caso]}` : "Sin asignar";
     const hijos = [
-      p("MI EXPEDIENTE JUDICIAL", { bold: true, size: 30, color: TINTA, after: 40 }),
-      p("Preparaci\xF3n individual para el juicio simulado", { color: BURDEOS, size: 22, after: 200 }),
+      p("JUICIO SIMULADO \xB7 TRABAJO ESCRITO", { bold: true, size: 20, color: BURDEOS, after: 40 }),
+      p(nombreTrabajo(perfil?.personaje) || "Sin personaje", { bold: true, size: 32, color: TINTA, after: 40 }),
+      p("Educaci\xF3n Ciudadana \xB7 3\xB0 medio \xB7 Liceo Luis Urbina Flores \xB7 Puntaje total: 40 puntos", { color: GRIS, size: 20, after: 200 }),
       tabla(["", ""], [
         ["Estudiante", `${perfil?.nombre || ""} ${perfil?.apellido || ""}`.trim()],
         ["Caso", caso],
         ["Personaje", PERSONAJES[perfil?.personaje]?.nombre || "Sin asignar"],
-        ["Estado", meta.entregadoEn ? `Entregada el ${fechaHora(meta.entregadoEn)}` : "Borrador (no entregada)"]
+        ["Estado", entregaVigente({ entregadoEn: meta.entregadoEn }) ? `Entregado el ${fechaHora(meta.entregadoEn)}` : "Borrador (no entregado)"]
       ])
     ];
     for (const s of estructuraDocumento(perfil, resp)) {
       hijos.push(p(s.titulo.toUpperCase(), { bold: true, size: 26, color: BURDEOS, after: 120, par: { spacing: { before: 360, after: 120 } } }));
       s.campos.forEach((c, i) => {
-        hijos.push(p(`${i + 1}. ${c.titulo}`, { bold: true, size: 22, par: { spacing: { before: 180, after: 60 }, keepNext: true } }));
+        hijos.push(p(`${i + 1}. ${c.titulo}${c.puntos ? ` (${c.puntos} pts)` : ""}`, { bold: true, size: 22, par: { spacing: { before: 180, after: 60 }, keepNext: true } }));
         if (c.tipo === "texto") {
           if (c.valor) c.valor.split("\n").forEach((l) => hijos.push(p(l)));
           else hijos.push(vacio());
@@ -21311,6 +21809,20 @@ This typically indicates that your device does not have a healthy Internet conne
         } else if (c.vacia) hijos.push(vacio());
         else hijos.push(tabla(c.columnas, c.filas));
       });
+    }
+    const filasR = rubrica(perfil?.personaje);
+    if (filasR.length) {
+      hijos.push(new Paragraph({ pageBreakBefore: true, children: [] }));
+      hijos.push(p("R\xDABRICA DE EVALUACI\xD3N", { bold: true, size: 26, color: BURDEOS, after: 60 }));
+      hijos.push(p(`${nombreTrabajo(perfil?.personaje)} \xB7 ${`${perfil?.nombre || ""} ${perfil?.apellido || ""}`.trim()} \xB7 ${caso}`, { color: GRIS, size: 20, after: 120 }));
+      hijos.push(tabla(NIVELES_RUBRICA.map(([n82]) => n82), [NIVELES_RUBRICA.map(([, d]) => d)]));
+      hijos.push(p("Sin evidencia: 0 puntos. Marque con un c\xEDrculo el puntaje del nivel alcanzado en cada fila.", { italics: true, color: GRIS, size: 18, par: { spacing: { before: 80, after: 120 } } }));
+      hijos.push(tabla(["N\xB0", "Para obtener el puntaje m\xE1ximo, la respuesta\u2026", "M\xE1x.", "D", "L", "ED", "I", "Obt."], [
+        ...filasR.map(([n82, tit, d, max]) => [n82, `${tit}
+${d}`, String(max), ...puntajesNivel(max), ""]),
+        ["", "Puntaje total", "40", "", "", "", "", ""]
+      ]));
+      hijos.push(tabla(["Nota", "Comentario del profesor"], [["Exigencia 60 %: 24 puntos = 4,0\n\n\n", "\n\n\n"]]));
     }
     hijos.push(p(`Descargado el ${fechaHora(/* @__PURE__ */ new Date())}`, { italics: true, color: GRIS, size: 18, par: { spacing: { before: 360 }, alignment: AlignmentType.RIGHT } }));
     return new Document({
@@ -21394,7 +21906,7 @@ This typically indicates that your device does not have a healthy Internet conne
     uidActual = null;
   }
   function estadoDe(exp, av) {
-    if (exp?.entregadoEn) return "entregada";
+    if (entregaVigente(exp)) return "entregada";
     if (!av || av.hechosP + av.hechosD === 0) return "sin_iniciar";
     return "en_desarrollo";
   }
@@ -21416,7 +21928,7 @@ This typically indicates that your device does not have a healthy Internet conne
         estado: estadoDe(expediente, av),
         ultimoGuardado: aFecha(expediente?.ultimoGuardado),
         entregadoEn: aFecha(expediente?.entregadoEn),
-        conCambiosPosteriores: Boolean(expediente?.editadoDespuesDeEntrega)
+        conCambiosPosteriores: entregaVigente(expediente) && Boolean(expediente?.editadoDespuesDeEntrega)
       };
     }).sort((a, b2) => `${a.perfil.apellido} ${a.perfil.nombre}`.localeCompare(`${b2.perfil.apellido} ${b2.perfil.nombre}`, "es"));
     return { config, filas };
@@ -21850,7 +22362,7 @@ This typically indicates that your device does not have a healthy Internet conne
       { class: "av" },
       barraProgreso(pct(f), "Avance"),
       h("span", { class: "av__n" }, `${pct(f)}%`),
-      f.avance?.hechosD ? h("span", { class: "av__c", title: "Bloque C (reflexi\xF3n y observaci\xF3n)" }, `C ${f.avance.despues}%`) : null
+      null
     );
   }
   async function verArchivo(f) {
@@ -21919,7 +22431,7 @@ This typically indicates that your device does not have a healthy Internet conne
         const blob = await generarBlob(f.perfil, exp?.respuestas || {}, { entregadoEn: exp?.entregadoEn });
         zip.file(`Caso${f.perfil.caso || "X"}/${nombreArchivo(f.perfil)}`, blob);
       }
-      descargarBlob(await zip.generateAsync({ type: "blob" }), `Preparaciones_juicio_${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.zip`);
+      descargarBlob(await zip.generateAsync({ type: "blob" }), `Trabajo_escrito_juicio_${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.zip`);
     } catch (e) {
       avisar2(e.message || String(e), "error", 8e3);
     }
@@ -21994,7 +22506,6 @@ This typically indicates that your device does not have a healthy Internet conne
         "div",
         { class: "ajustes" },
         h("label", { class: "opcion" }, edic, h("span", null, h("strong", null, "Permitir edici\xF3n. "), "Si lo desactivas, nadie puede escribir (solo leer y descargar).")),
-        h("label", { class: "opcion" }, bloqC, h("span", null, h("strong", null, "Habilitar el bloque C. "), "Reflexi\xF3n y observaci\xF3n: act\xEDvalo despu\xE9s de las audiencias.")),
         msg,
         guardar
       )
@@ -22549,7 +23060,7 @@ This typically indicates that your device does not have a healthy Internet conne
   function marco(app2, actual, contenido) {
     const lista = secciones(clave());
     const estado = h("button", { type: "button", class: "estado-guardado", "data-estado": S.guardado?.codigo || "guardado", onclick: () => guardarAhora() }, "Guardado");
-    const barraP = barraProgreso(S.avance?.preparacion || 0, "Avance de la preparaci\xF3n");
+    const barraP = barraProgreso(S.avance?.preparacion || 0, "Avance del trabajo escrito");
     const pctP = h("span", { class: "cab__pct" }, `${S.avance?.preparacion || 0}%`);
     S.barra = { estado, progreso: barraP };
     pintarEstado(S.guardado || { codigo: "guardado" });
@@ -22591,7 +23102,7 @@ This typically indicates that your device does not have a healthy Internet conne
         h("strong", null, `${p.nombre} ${p.apellido}`),
         h("span", null, `${p.caso ? `Caso ${p.caso}` : "Sin caso"} \xB7 ${PERSONAJES[p.personaje]?.nombre || "Sin personaje"}`)
       ),
-      h("div", { class: "cab__avance" }, h("span", { class: "cab__lbl" }, "Preparaci\xF3n"), barraP, pctP),
+      h("div", { class: "cab__avance" }, h("span", { class: "cab__lbl" }, "Trabajo escrito"), barraP, pctP),
       h("div", { class: "cab__acc" }, estado, h("button", { type: "button", class: "btn btn--chico btn--secundario", onclick: cerrarSesionUI }, "Salir"))
     );
     const i = lista.findIndex((s) => s.id === actual);
@@ -22621,7 +23132,13 @@ This typically indicates that your device does not have a healthy Internet conne
       "div",
       { class: "pr__cab" },
       h("span", { class: "pr__num" }, n82),
-      h("div", null, h("h3", { class: "pr__tit" }, c.titulo), c.ayuda ? h("p", { class: "pr__ayuda" }, c.ayuda) : null),
+      h(
+        "div",
+        null,
+        h("h3", { class: "pr__tit" }, c.titulo, c.formato ? h("span", { class: "pr__formato" }, ` \xB7 ${c.formato}`) : null),
+        c.ayuda ? h("p", { class: "pr__ayuda" }, h("strong", null, "C\xF3mo hacerlo: "), c.ayuda) : null,
+        c.ejemplo ? h("p", { class: "pr__ayuda pr__ejemplo" }, h("strong", null, "Puedes empezar as\xED: "), h("em", null, c.ejemplo)) : null
+      ),
       c.puntos ? h("span", { class: "chip chip--gris" }, `${c.puntos} pts`) : null
     );
     const marca = h("span", { class: "pr__estado" });
@@ -22637,8 +23154,8 @@ This typically indicates that your device does not have a healthy Internet conne
       const cont = h("span", { class: "contador" });
       const pc2 = () => {
         const w = contarPalabras(ta2.value);
-        cont.textContent = `${w} / ${c.limite} palabras`;
-        cont.classList.toggle("excede", w > c.limite);
+        cont.textContent = c.limite ? `${w} / ${c.limite} palabras${w > c.limite ? " \xB7 te pasaste del m\xE1ximo" : ""}` : `${w} palabras`;
+        cont.classList.toggle("excede", Boolean(c.limite) && w > c.limite);
       };
       ta2.addEventListener("input", pc2);
       pc2();
@@ -22691,9 +23208,9 @@ This typically indicates that your device does not have a healthy Internet conne
       return h(
         "tr",
         null,
-        h("td", null, h("a", { href: `#/s/${s.id}` }, s.titulo)),
+        h("td", null, h("a", { href: `#/s/${s.id}` }, `${s.titulo} \xB7 ${nombreTrabajo(p.personaje)}`)),
         h("td", null, s.puntos ? `${s.puntos} pts` : "No se eval\xFAa"),
-        h("td", null, s.despues && !bloqueCAbierto() ? "Despu\xE9s de la audiencia" : `${a.hechos} de ${a.total}`)
+        h("td", null, `${a.hechos} de ${a.total} preguntas`)
       );
     };
     return h(
@@ -22723,12 +23240,7 @@ This typically indicates that your device does not have a healthy Internet conne
           "table",
           { class: "tabla-simple" },
           h("thead", null, h("tr", null, h("th", null, "Secci\xF3n"), h("th", null, "Puntaje"), h("th", null, "Avance"))),
-          h(
-            "tbody",
-            null,
-            lista.map(filaBloque),
-            h("tr", null, h("td", null, "Participaci\xF3n en la audiencia"), h("td", null, "40 pts"), h("td", null, "La observa el profesor"))
-          )
+          h("tbody", null, lista.map(filaBloque))
         ),
         h("h2", { class: "h-sec" }, "C\xF3mo funciona"),
         h(
@@ -22736,11 +23248,11 @@ This typically indicates that your device does not have a healthy Internet conne
           null,
           h("li", null, "Usa el \xEDndice para moverte. \u2713 = completa, \u25CF = en curso, \u25CB = sin empezar."),
           h("li", null, "Todo se guarda solo. Revisa el estado arriba a la derecha."),
-          h("li", null, "Respuestas breves: cada pregunta muestra su l\xEDmite."),
-          h("li", null, "Al terminar la preparaci\xF3n, ve a \xABRevisar, descargar y entregar\xBB."),
-          h("li", null, "El bloque C se completa despu\xE9s de tu audiencia.")
+          h("li", null, "Cada pregunta indica su extensi\xF3n (oraciones, palabras o filas) y su puntaje."),
+          h("li", null, "Antes de entregar, revisa tu trabajo con la \xABR\xFAbrica de evaluaci\xF3n\xBB."),
+          h("li", null, "Al terminar, ve a \xABRevisar, descargar y entregar\xBB.")
         ),
-        h("a", { class: "btn", href: "#/s/a" }, "Empezar mi preparaci\xF3n \u2192")
+        h("a", { class: "btn", href: "#/s/t" }, "Empezar mi trabajo escrito \u2192")
       ) : null
     );
   }
@@ -22750,32 +23262,55 @@ This typically indicates that your device does not have a healthy Internet conne
     return h(
       "div",
       { class: "sec" },
-      h("h1", null, sec.titulo),
-      h("p", { class: "sec__intro" }, sec.intro),
+      h("h1", null, `${sec.titulo} \xB7 ${nombreTrabajo(clave())}`),
+      sec.intro ? h("p", { class: "sec__intro" }, sec.intro) : null,
+      sec.id === "t" ? h("div", { class: "aviso aviso--info instrucciones-trabajo" }, h("span", null, "i"), h(
+        "div",
+        null,
+        h("p", null, h("strong", null, INSTRUCCIONES_TRABAJO.principal)),
+        h("p", null, INSTRUCCIONES_TRABAJO.pasos),
+        h("p", null, INSTRUCCIONES_TRABAJO.noInventes),
+        h("p", null, `Puntaje total: 40 puntos (incluye 4 puntos del criterio transversal). `, h("a", { href: "#/s/rubrica" }, "Ver r\xFAbrica"))
+      )) : null,
       cerrado ? h("div", { class: "aviso aviso--alerta" }, h("span", null, "!"), h("p", null, "Esta secci\xF3n se habilita despu\xE9s de la audiencia. El profesor la abrir\xE1.")) : null,
       !editable() ? h("div", { class: "aviso aviso--alerta" }, h("span", null, "!"), h("p", null, "La edici\xF3n est\xE1 cerrada. Puedes leer y descargar tu Word.")) : null,
       sec.campos.map((c, i) => campoUI(c, i + 1, lectura))
     );
   }
-  function vistaPauta() {
+  function vistaRubrica() {
+    const filas = rubrica(clave());
+    if (!filas.length) return h("div", { class: "sec" }, h("h1", null, "R\xFAbrica de evaluaci\xF3n"), h("p", null, "La r\xFAbrica aparece cuando el profesor te asigne un personaje."));
     return h(
       "div",
       { class: "sec" },
-      h("h1", null, "Pauta de evaluaci\xF3n \xB7 100 puntos"),
-      h("p", { class: "sec__intro" }, "El profesor eval\xFAa lo que hace tu personaje, no los errores de tus compa\xF1eros. La nota no depende de acertar el resultado del juicio, sino de fundamentar con las pruebas."),
+      h("h1", null, `R\xFAbrica de evaluaci\xF3n \xB7 ${nombreTrabajo(clave())}`),
+      h("p", { class: "sec__intro" }, "Puntaje total: 40 puntos. Exigencia 60 %: 24 puntos = nota 4,0. La evaluaci\xF3n no depende de acertar el desenlace, sino de fundamentar con las pruebas."),
       h(
         "table",
         { class: "tabla-simple" },
-        h("thead", null, h("tr", null, h("th", null, "Componente"), h("th", null, "Qu\xE9 se observa"), h("th", null, "M\xE1x."), h("th", null, "D\xF3nde"))),
-        h("tbody", null, PAUTA.map(([a, b2, c, d]) => h("tr", null, h("td", null, h("strong", null, a)), h("td", null, b2), h("td", null, String(c)), h("td", { class: "gris" }, d))))
+        h("thead", null, h("tr", null, NIVELES_RUBRICA.map(([n82]) => h("th", null, n82)))),
+        h("tbody", null, h("tr", null, NIVELES_RUBRICA.map(([, d]) => h("td", null, d))))
       ),
-      h("h2", { class: "h-sec" }, "Niveles de logro"),
-      h(
+      h("p", { class: "nota-chica" }, "Sin evidencia: 0 puntos."),
+      h("h2", { class: "h-sec" }, "Para obtener el puntaje m\xE1ximo, la respuesta\u2026"),
+      h("div", { class: "tabla-resp" }, h(
         "table",
-        { class: "tabla-simple" },
-        h("thead", null, h("tr", null, h("th", null, "Criterio de 10"), h("th", null, "Criterio de 5"), h("th", null, "Nivel"))),
-        h("tbody", null, NIVELES.map((r) => h("tr", null, r.map((x2) => h("td", null, x2)))))
-      )
+        { class: "tabla-simple tabla-rubrica" },
+        h("thead", null, h("tr", null, ["N\xB0", "Criterio", "M\xE1x.", "D", "L", "ED", "I"].map((x2) => h("th", null, x2)))),
+        h(
+          "tbody",
+          null,
+          filas.map(([n82, t2, d, max]) => h(
+            "tr",
+            null,
+            h("td", null, h("strong", null, n82)),
+            h("td", null, h("strong", null, t2), h("br"), d),
+            h("td", null, h("strong", null, String(max))),
+            puntajesNivel(max).map((x2) => h("td", { class: "gris" }, x2))
+          )),
+          h("tr", null, h("td", null, ""), h("td", null, h("strong", null, "Puntaje total")), h("td", null, h("strong", null, "40")), h("td", { colspan: "4" }, ""))
+        )
+      ))
     );
   }
   function vistaEntrega() {
@@ -22788,7 +23323,8 @@ This typically indicates that your device does not have a healthy Internet conne
       });
     }
     const exp = S.expediente;
-    const estado = exp?.entregadoEn ? h("div", { class: "aviso aviso--ok" }, h("span", null, "\u2713"), h("p", null, `Entregada el ${fechaHora(exp.entregadoEn)}.${exp.editadoDespuesDeEntrega ? " Hiciste cambios despu\xE9s: vuelve a entregar para que el profesor vea la \xFAltima versi\xF3n." : ""}`)) : h("div", { class: "aviso aviso--info" }, h("span", null, "i"), h("p", null, "A\xFAn no entregas. El profesor puede ver tu avance, pero la entrega marca que terminaste tu preparaci\xF3n."));
+    const vigente = entregaVigente(exp);
+    const estado = vigente ? h("div", { class: "aviso aviso--ok" }, h("span", null, "\u2713"), h("p", null, `Entregado el ${fechaHora(exp.entregadoEn)}.${exp.editadoDespuesDeEntrega ? " Hiciste cambios despu\xE9s: vuelve a entregar para que el profesor vea la \xFAltima versi\xF3n." : ""}`)) : exp?.entregadoEn ? h("div", { class: "aviso aviso--alerta" }, h("span", null, "!"), h("p", null, `Tu entrega anterior (${fechaHora(exp.entregadoEn)}) era de la preparaci\xF3n antigua y qued\xF3 guardada. Ahora debes responder y entregar el trabajo escrito.`)) : h("div", { class: "aviso aviso--info" }, h("span", null, "i"), h("p", null, "A\xFAn no entregas. El profesor puede ver tu avance, pero la entrega marca que terminaste tu trabajo escrito."));
     const bWord = h("button", { type: "button", class: "btn btn--azul", onclick: async () => {
       bWord.disabled = true;
       try {
@@ -22800,18 +23336,18 @@ This typically indicates that your device does not have a healthy Internet conne
       bWord.disabled = false;
     } }, "Descargar mi Word");
     const bEntregar = h("button", { type: "button", class: "btn", disabled: !editable() || null, onclick: async () => {
-      const ok = await confirmar({ titulo: "Entregar mi preparaci\xF3n", mensaje: faltan.length ? `Te faltan ${faltan.length} preguntas por completar. \xBFEntregar igual? Podr\xE1s seguir editando mientras el profesor no cierre la edici\xF3n.` : "Podr\xE1s seguir editando mientras el profesor no cierre la edici\xF3n. \xBFEntregar?", ok: "Entregar" });
+      const ok = await confirmar({ titulo: "Entregar mi trabajo escrito", mensaje: faltan.length ? `Te faltan ${faltan.length} preguntas por completar. \xBFEntregar igual? Podr\xE1s seguir editando mientras el profesor no cierre la edici\xF3n.` : "Podr\xE1s seguir editando mientras el profesor no cierre la edici\xF3n. \xBFEntregar?", ok: "Entregar" });
       if (!ok) return;
       try {
         const r = await enviarPreparacion({ progreso: S.avance.preparacion });
         S.expediente = { ...S.expediente, entregadoEn: r.entregadoEn, editadoDespuesDeEntrega: false, estado: "entregada" };
         sonar.sello?.();
-        avisar2("Preparaci\xF3n entregada.", "ok");
+        avisar2("Trabajo escrito entregado.", "ok");
         rutaEstudiante(document.getElementById("app"), "entrega");
       } catch (e) {
         avisar2(e.message || "No se pudo entregar.", "error", 8e3);
       }
-    } }, exp?.entregadoEn ? "Volver a entregar" : "Entregar mi preparaci\xF3n");
+    } }, vigente ? "Volver a entregar" : "Entregar mi trabajo escrito");
     return h(
       "div",
       { class: "sec" },
@@ -22823,7 +23359,7 @@ This typically indicates that your device does not have a healthy Internet conne
         h("thead", null, h("tr", null, h("th", null, "Secci\xF3n"), h("th", null, "Respondidas"))),
         h("tbody", null, lista.map((s) => {
           const a = S.avance.porSeccion[s.id];
-          return h("tr", null, h("td", null, h("a", { href: `#/s/${s.id}` }, s.titulo)), h("td", null, `${a.hechos} de ${a.total}${s.despues && !bloqueCAbierto() ? " \xB7 despu\xE9s de la audiencia" : ""}`));
+          return h("tr", null, h("td", null, h("a", { href: `#/s/${s.id}` }, s.titulo)), h("td", null, `${a.hechos} de ${a.total}`));
         }))
       ),
       faltan.length ? h(
@@ -22831,9 +23367,9 @@ This typically indicates that your device does not have a healthy Internet conne
         null,
         h("h2", { class: "h-sec" }, "Te falta completar"),
         h("ul", null, faltan.map((f) => h("li", null, h("a", { href: `#/s/${f.s.id}`, onclick: () => setTimeout(() => document.getElementById(`p-${f.c.id}`)?.scrollIntoView({ block: "center" }), 120) }, `${f.s.corto} \xB7 ${f.n}. ${f.c.titulo}`))))
-      ) : h("p", { class: "ok-txt" }, "\u2713 Tu preparaci\xF3n (A y B) est\xE1 completa."),
+      ) : h("p", { class: "ok-txt" }, "\u2713 Tu trabajo escrito est\xE1 completo. Rev\xEDsalo con la r\xFAbrica antes de entregar."),
       h("div", { class: "grupo-botones" }, bWord, bEntregar),
-      h("p", { class: "nota-chica" }, "El Word es tu documento de apoyo durante el juicio. Si faltas, quien te reemplace lo leer\xE1 junto con tu ficha.")
+      h("p", { class: "nota-chica" }, "El Word incluye tus respuestas y la r\xFAbrica. Te sirve de apoyo durante el juicio.")
     );
   }
   async function rutaEstudiante(app2, id2 = "inicio") {
@@ -22842,7 +23378,7 @@ This typically indicates that your device does not have a healthy Internet conne
     const sec = lista.find((s) => s.id === id2) || lista[0];
     let cont;
     if (sec.id === "inicio") cont = vistaInicio();
-    else if (sec.id === "pauta") cont = vistaPauta();
+    else if (sec.id === "rubrica") cont = vistaRubrica();
     else if (sec.id === "entrega") cont = vistaEntrega();
     else if (!S.perfil?.personaje) cont = h("div", { class: "sec" }, h("h1", null, sec.titulo), h("div", { class: "aviso aviso--alerta" }, h("span", null, "!"), h("p", null, "Esta secci\xF3n aparece cuando el profesor te asigne un personaje.")));
     else cont = vistaCampos(sec);
